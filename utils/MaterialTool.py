@@ -5,13 +5,23 @@ from matplotlib import pyplot as plt
 from tmm import coh_tmm
 from scipy.interpolate import UnivariateSpline
 from scipy.optimize import differential_evolution
-
-
-
+from .Material import Material
+import pandas as pd
+import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 class MaterialTool:
+
     def __init__(self):
         pass
-
+    @staticmethod
+    def create_method_mapping():
+        """
+        创建一个公共的参数映射方法
+        """
+        return {
+            "interpolite_composites": MaterialTool.interpolite_composites,
+            "fit_composites": MaterialTool.fit_composites,
+        }
     @staticmethod
     def composites_calculate_rt_tmm(composites: dict, wl, n_air: int = 1, plot1: bool = False):
         '''
@@ -25,6 +35,7 @@ class MaterialTool:
         '''
         R, T = [], []
         Ab = []
+        img_url=''
         all_composites = list(composites.values())
         dw = [j.get_thickness() for j in all_composites]
         print(dw)
@@ -46,9 +57,12 @@ class MaterialTool:
             plt.xlabel("Wavelength (nm)")
             plt.ylabel("Reflectance / Transmittance")
             plt.legend()
-            plt.show()
+            img_url = fr"content\image_temp\DE_image\{list(composites.keys())}.png"
+            # 保存图片
+            plt.savefig(img_url)
+            # plt.show()
 
-        return np.array(R), np.array(T), np.array(Ab)
+        return np.array(R), np.array(T), np.array(Ab),img_url
 
     @staticmethod
     def build_composites_set(old_composites, build_composites: list):
@@ -97,8 +111,36 @@ class MaterialTool:
         return composites
 
     @staticmethod
+    def calculate_fitting_errors(y_true, y_pred):
+        """
+        此函数用于计算多种拟合误差指标。
+
+        参数:
+        y_true (array-like): 真实值数组。
+        y_pred (array-like): 预测值数组。
+
+        返回:
+        dict: 包含均方误差（MSE）、均方根误差（RMSE）、平均绝对误差（MAE）和决定系数（R^2）的字典。
+        """
+        # 计算均方误差（MSE）
+        mse = mean_squared_error(y_true, y_pred)
+        # 计算均方根误差（RMSE）
+        rmse = np.sqrt(mse)
+        # 计算平均绝对误差（MAE）
+        mae = mean_absolute_error(y_true, y_pred)
+        # 计算决定系数（R^2）
+        r2 = r2_score(y_true, y_pred)
+
+        return {
+            'MSE': mse,
+            'RMSE': rmse,
+            'MAE': mae,
+            'R^2': r2
+        }
+
+    @staticmethod
     def fit_composites(
-            mathod,
+            method:str,
             composites: dict,
             common_wl,
             number_polyfit: list,
@@ -118,15 +160,21 @@ class MaterialTool:
         sm = len(composites.keys())
         # print(f"共{sm}种材料")
         nk = 1
+        fit_error = []
+        mathod=MaterialTool.create_method_mapping()[method]
         if all_plot_data:
             plt.figure(figsize=(12, 3 * 6))
         for i in composites.values():
+            data_error={}
             data = i.get_data()
             data.sort_values(by="wl", ascending=True, inplace=True)
             wl = data["wl"].values * 1e3
             n = data["n"].values
             k = data["k"].values
-            n_1, k_1 = mathod(wl, common_wl, n, k, number_polyfit, *args, **kwargs)
+            n_1, k_1,n_error,k_error = mathod(wl, common_wl, n, k, number_polyfit, *args, **kwargs)
+            data_error["n_error"] = n_error
+            data_error["k_error"] = k_error
+            fit_error.append(data_error)
             n_k = n_1 + 1j * k_1
             i.set_fitted_data(pd.DataFrame({"wl": common_wl, "n_k": n_k}))
             maxindex = np.where(wl < max(common_wl))[0][-1]
@@ -143,13 +191,16 @@ class MaterialTool:
                 plt.plot(common_wl, k_1, "r-", label='polyfit')
                 plt.title(i.get_name())
                 plt.legend()
+        zipped=dict(zip(list(composites.keys()),fit_error))
         if all_plot_data:
-            img_url = fr"E:\BaiduSyncdisk\code\Python\program01\GraduationThesis\MaterialStart\my_rout\image_temp\{list(composites.keys())}.png"
+            img_url = fr"content\image_temp\fit_image\{list(composites.keys())}.png"
             plt.tight_layout()
             #保存图片
             plt.savefig(img_url)
             #缓存图片url地址给用户
-            return f'{list(composites.keys())}.png'
+            return f'{list(composites.keys())}.png',zipped
+        else:
+            return zipped
 
     @staticmethod
     def plot_composites(wl, common_wl, n, k, number_polyfit: list):
@@ -164,9 +215,13 @@ class MaterialTool:
         '''
         eq1 = np.polyfit(wl, n, number_polyfit[0])
         n_1 = np.polyval(eq1, common_wl)
+        n_fit=np.polyval(eq1, wl)
+        n_error=MaterialTool.calculate_fitting_errors(n, n_fit)
         eq2 = np.polyfit(wl, k, number_polyfit[0])
         k_1 = np.polyval(eq2, common_wl)
-        return n_1, k_1
+        k_fit=np.polyval(eq2, wl)
+        k_error=MaterialTool.calculate_fitting_errors(k, k_fit)
+        return n_1, k_1, n_error, k_error
 
     @staticmethod
     def interpolite_composites(wl, common_wl, n, k1, number_polyfit: list):
@@ -182,9 +237,13 @@ class MaterialTool:
         try:
             eq1 = UnivariateSpline(wl, n, k=number_polyfit[0], s=0.5)
             n_1 = eq1(common_wl)
+            n_fit=eq1(wl)
+            n_error=MaterialTool.calculate_fitting_errors(n, n_fit)
             eq2 = UnivariateSpline(wl, k1, k=number_polyfit[0], s=0.5)
             k_1 = eq2(common_wl)
-            return n_1, k_1
+            k_fit=eq2(wl)
+            k_error=MaterialTool.calculate_fitting_errors(k1, k_fit)
+            return n_1, k_1, n_error, k_error
         except Exception as e:
             print(e)
 
@@ -333,3 +392,5 @@ class MaterialTool:
         for i in range(len(wl)):
             filtered_data.append(1)
         return filtered_data
+
+

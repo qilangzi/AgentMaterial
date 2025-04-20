@@ -1,22 +1,32 @@
-from MaterialTool import MaterialTool as MT
+from .MaterialTool import MaterialTool as MT
 import numpy as np
 class CalculatedMaterials:
-    def __init__(self, number_polyfit:list,
-                 build_composites:list, set_thickness:list, wl:list,
+    def __init__(self,
+                 build_composites:list, set_thickness:list, wl:list
                  ):
-        self.number_polyfit=number_polyfit
-        self.build_composites=build_composites
+        self.build_composites:list=build_composites
         self.set_thickness:list=set_thickness
         self.wl:list=wl
-        self._dir_path = rf"E:\BaiduSyncdisk\1-毕业论文\仿真\材料数据库\新建文件夹"
+        self._dir_path = rf"content/materialData"
+        self.__composites = MT.load_Material(self._dir_path, self.build_composites)
+        self.__common_wl = np.linspace(self.wl[0], self.wl[1], self.wl[2])
         pass
 
-    def calculate_fit_data(self, method=MT.interpolite_composites):
-        common_wl =np.linspace(self.wl[0],self.wl[1] ,self.wl[2])
-        composites = MT.load_Material(self._dir_path, self.build_composites)
-        solution_fit=MT.fit_composites(method, composites, common_wl, self.number_polyfit, True)
+    def calculate_fit_data(self, number_polyfit:list[int],method:str):
+        solution_fit,zipped=MT.fit_composites(method, self.__composites, self.__common_wl, number_polyfit, True)
+        return solution_fit,zipped
 
-        return solution_fit
+    def calculate_tmm_DE(self,bounds:list):
+        composites = MT.build_composites_set(self.__composites, self.set_thickness)
+        MT.set_thickness_method(composites, self.set_thickness)
+        # R,T,A=MT.composites_calculate_rt_tmm(composites, self.__common_wl)
+        target_T = MT.filter_data(self.__common_wl)
+        optimal_thickness = MT.optimal_defferential_evolution(MT.object_func_T, composites, bounds, self.__common_wl,
+                                                              target_T)
+        R, T, A,img_url = MT.composites_calculate_rt_tmm(composites,self.__common_wl, plot1=True)
+        return optimal_thickness,R, T, A, img_url
+
+
 
 
 

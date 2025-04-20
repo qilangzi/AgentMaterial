@@ -1,5 +1,5 @@
 # Ignore virtual environment directory
-.venv/
+#.venv/
 
 # Ignore environment variables file
 .env
@@ -9,3 +9,5 @@ __pycache__/
 
 # Ignore PyCharm project files
 .idea/
+
+content/document/电磁屏蔽/
