@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from database.connection import Base, engine
-
+from database.modles import *
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动阶段

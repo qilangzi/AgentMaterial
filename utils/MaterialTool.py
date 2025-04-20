@@ -5,8 +5,8 @@ from matplotlib import pyplot as plt
 from tmm import coh_tmm
 from scipy.interpolate import UnivariateSpline
 from scipy.optimize import differential_evolution
-
-
+from .Material import Material
+import pandas as pd
 
 class MaterialTool:
     def __init__(self):
@@ -144,7 +144,7 @@ class MaterialTool:
                 plt.title(i.get_name())
                 plt.legend()
         if all_plot_data:
-            img_url = fr"E:\BaiduSyncdisk\code\Python\program01\GraduationThesis\MaterialStart\my_rout\image_temp\{list(composites.keys())}.png"
+            img_url = fr"content\image_temp\{list(composites.keys())}.png"
             plt.tight_layout()
             #保存图片
             plt.savefig(img_url)
