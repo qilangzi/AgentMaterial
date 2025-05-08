@@ -19,7 +19,7 @@ if __name__=='__main__':
     from database.connection import Base, engine, get_db
     from database.modles import *
     from model.qwenModel import QwenModel
-
+    from utils.CalculatedMaterials import CalculatedMaterials
 
     Base.metadata.create_all(bind=engine)
     async def main():
@@ -30,9 +30,16 @@ if __name__=='__main__':
             api_key="sk-568bd13551dd42ae9c623bd04504ba02",
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
         )
-        message=await qw.fit_format(qw_model_name="qwen-plus", build_composites=["Au", "Ag", "TiO2"], set_thickness=[50, 20, 50], wl=[200, 1200, 1000])
+        CM=CalculatedMaterials(
+            build_composites=['SiO2', 'MoS2', 'TiO2'],
+            set_thickness=[50,20,50],
+            wl=[200, 1200, 1000]
+        )
+        # message=await qw.fit_format(qw_model_name="qwen-plus",CM=CM)
+        solution_fit, zipped = CM.calculate_fit_data(number_polyfit=[3], method='interpolite_composites')
+        img1_path = f'content/image_temp/fit_image/{solution_fit}'
+        jsondata,tokens= await qw.fit_evaluation(qw_model_name='qwen-vl-max-latest', img_path=img1_path, zipped=zipped)
         await qw.client.close()
-        print(message)
     asyncio.run(main())
 
     # from utils.CalculatedMaterials import CalculatedMaterials
@@ -40,7 +47,7 @@ if __name__=='__main__':
     #
     # # 设置默认路径，为避免每次都要输入路径
     # # os.chdir(r'E:\PycharmProjects\AgentMaterial')
-    #
+    # #
     # CM = CalculatedMaterials(build_composites=['SiO2', 'Ag', 'TiO2'],
     #                          set_thickness=[50, 20, 50],
     #                          wl=[200, 1200, 1000])

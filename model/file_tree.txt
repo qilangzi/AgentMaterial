@@ -1,0 +1,205 @@
+├── .env
+├── .git
+├── .gitignore
+├── .idea
+├── .venv
+├── __pycache__/
+│   └── main.cpython-310.pyc
+├── content/
+│   ├── document/
+│   │   ├── Batch/
+│   │   │   ├── error.jsonl
+│   │   │   ├── input_file_path.jsonl
+│   │   │   └── result.jsonl
+│   │   ├── input/
+│   │   │   ├── c4ra01617c.pdf
+│   │   │   └── c4ta05939e.pdf
+│   │   ├── output/
+│   │   ├── over/
+│   │   │   ├── 201906769.pdf
+│   │   │   ├── 202000883.pdf
+│   │   │   ├── ACS MXene复合电磁屏蔽材料最新研究现状.pdf
+│   │   │   ├── ACS 在复合电磁干扰屏蔽膜中构建导热纳米通道.pdf
+│   │   │   ├── ACS 用于电磁干扰屏蔽的石墨烯泡沫.pdf
+│   │   │   ├── ACS 用于高效电磁屏蔽的仿生碳超结构.pdf
+│   │   │   ├── ACS 透明石墨烯镍网薄膜的电磁干扰屏蔽.pdf
+│   │   │   ├── ACS高效可靠的透明电磁干扰屏蔽膜.pdf
+│   │   │   ├── AFM 用于电磁屏蔽的2D MXene综述.pdf
+│   │   │   ├── AFM电绝缘电磁干扰屏蔽材料视角.pdf
+│   │   │   ├── AM 铁磁石墨烯石英织物超宽带强电磁干扰屏蔽.pdf
+│   │   │   ├── AMT自毁式电磁干扰屏蔽膜.pdf
+│   │   │   ├── Adv Funct Materials - 2024 - Liu - Electrically Insulating Electromagnetic Interference Shielding Materials  A Perspective.pdf
+│   │   │   ├── F075012.pdf
+│   │   │   └── S2213956721002668-main.pdf
+│   │   └── 电磁屏蔽/
+│   │       ├── 电磁屏蔽/
+│   │       │   ├── CEJ  2D MXenes：用于微波吸收和电磁干扰屏蔽的电磁特性.pdf
+│   │       │   ├── CEJ 新型屏蔽胶囊结构设计制备高性能自修复MXene基海绵超高效电磁干扰屏蔽.pdf
+│   │       │   ├── CEJ 水敏夹层结构，用于可自调整的智能电磁屏蔽.pdf
+│   │       │   ├── CEJ 透光和电绝缘离子溶液的电磁屏蔽.pdf
+│   │       │   ├── CEJ 高温电磁屏蔽形状记忆聚合物复合材料.pdf
+│   │       │   ├── CEJ高效电磁干扰屏蔽涂料的水性导电油墨.pdf
+│   │       │   ├── Carbon Energy - 2024 - Deng - Transparent electromagnetic interference shielding materials using MXene.pdf
+│   │       │   ├── Carbon 开孔酚醛碳泡沫与电磁干扰屏蔽性能.pdf
+│   │       │   ├── Carbon 用于可调谐微波吸收 电磁干扰屏蔽和设备的操纵电磁响应.pdf
+│   │       │   ├── Carbon 用于电磁干扰屏蔽的碳纳米纤维垫.pdf
+│   │       │   ├── Carbon用于有效电磁干扰屏蔽的超薄碳泡沫.pdf
+│   │       │   ├── InfoMat - 2022 - Ahmed - Two‐dimensional MXenes  New frontier of wearable and flexible electronics.pdf
+│   │       │   ├── JMCA 复合泡沫的电磁屏蔽性能研究进展.pdf
+│   │       │   ├── MTA 用于电磁干扰屏蔽的MXene：实验和理论观点.pdf
+│   │       │   ├── MTP 二维材料在电磁屏蔽领域的研究进展.pdf
+│   │       │   ├── NL 可持续的双网电磁屏蔽结构材料.pdf
+│   │       │   ├── Nano-Micro Letters用于电磁干扰屏蔽的柔性复合材料.pdf
+│   │       │   ├── S0008622323004141.pdf
+│   │       │   ├── Small 具有可调电磁屏蔽的智能非晶复合线.pdf
+│   │       │   ├── Small 用于电磁干扰屏蔽的高度可拉伸透明水凝胶.pdf
+│   │       │   ├── TCR GHz范围内的电磁屏蔽材料.pdf
+│   │       │   ├── c5ra16453b.pdf
+│   │       │   ├── c8tc01313f.pdf
+│   │       │   ├── c9ra06399d.pdf
+│   │       │   ├── d0na00760a.pdf
+│   │       │   ├── d0ta08749a.pdf
+│   │       │   ├── d0ta09337h.pdf
+│   │       │   ├── d1ma00918d.pdf
+│   │       │   ├── d1mh01346g.pdf
+│   │       │   ├── d1ra04145b.pdf
+│   │       │   ├── d1ta09522f.pdf
+│   │       │   ├── d1ta11025j.pdf
+│   │       │   ├── d2nr02224a.pdf
+│   │       │   ├── d2nr05047a.pdf
+│   │       │   ├── d2ra05439f.pdf
+│   │       │   ├── d2ra07791d.pdf
+│   │       │   ├── d2tc02856e.pdf
+│   │       │   ├── d2tc03306b.pdf
+│   │       │   ├── d2tc04381e.pdf
+│   │       │   ├── d2tc04819a.pdf
+│   │       │   ├── d3cp05506j.pdf
+│   │       │   ├── d3cs01014g.pdf
+│   │       │   ├── d3mh02074f.pdf
+│   │       │   ├── d3nj02339g.pdf
+│   │       │   ├── d3nj04508k.pdf
+│   │       │   ├── d3ra00638g.pdf
+│   │       │   ├── d3ta06467k.pdf
+│   │       │   ├── d3ta07181b.pdf
+│   │       │   ├── d3ta07416a.pdf
+│   │       │   ├── d3ta07615f.pdf
+│   │       │   ├── d3tc01934a.pdf
+│   │       │   ├── d3tc03024e.pdf
+│   │       │   ├── d3tc04134d.pdf
+│   │       │   ├── d4mh00539b.pdf
+│   │       │   ├── d4mh00594e.pdf
+│   │       │   ├── d4mh01774a.pdf
+│   │       │   ├── d4nj03558e.pdf
+│   │       │   ├── d4ra08030k.pdf
+│   │       │   ├── d4ta02088j.pdf
+│   │       │   ├── d4ta04627g.pdf
+│   │       │   ├── d4ta06252c.pdf
+│   │       │   ├── d4ta06651k.pdf
+│   │       │   ├── d4ta06879c.pdf
+│   │       │   ├── d4tc02961e.pdf
+│   │       │   ├── d4tc05385k.pdf
+│   │       │   ├── d5ta00484e.pdf
+│   │       │   ├── jia2018.pdf
+│   │       │   ├── ng2016.pdf
+│   │       │   ├── s40820-023-01122-5.pdf
+│   │       │   ├── song2021.pdf
+│   │       │   ├── 三维导电磁网络修饰木源多孔碳的多尺度协同耦合电磁干扰屏蔽.pdf
+│   │       │   ├── 使用 MXene 的透明电磁干扰屏蔽材料.pdf
+│   │       │   ├── 具有实时可调屏蔽效率的拉伸应力门控电磁干扰屏蔽织物.pdf
+│   │       │   ├── 具有砖泥结构的超轻MXene气凝胶木基多孔碳电磁屏蔽复合材料.pdf
+│   │       │   ├── 单层MXene组件的电磁屏蔽.pdf
+│   │       │   ├── 多光谱智能窗动态光调制和电磁微波屏蔽.pdf
+│   │       │   ├── 将商品棉变质为多功能电磁干扰屏蔽织物的电磁仿真集成策略.pdf
+│   │       │   ├── 柔性自粘高性能电磁屏蔽膜.pdf
+│   │       │   ├── 用于电磁干扰屏蔽的超薄金属复合材料.pdf
+│   │       │   ├── 用于高性能结构电磁干扰屏蔽的导电木.pdf
+│   │       │   ├── 电磁和声双屏蔽石墨烯基元结构.pdf
+│   │       │   ├── 电磁屏蔽透明导体用La掺杂BaSnO3.pdf
+│   │       │   ├── 电磁屏蔽镁合金综述.pdf
+│   │       │   └── 电磁干扰屏蔽材料设计与先进制造.pdf
+│   │       └── 电磁屏蔽.zip
+│   ├── image_temp/
+│   │   ├── DE_image/
+│   │   │   ├── img.png
+│   │   │   └── img_1.png
+│   │   ├── ['Ag', 'TiO2'].png
+│   │   └── fit_image/
+│   │       ├── ['Ag', 'Au', 'TiO2'].png
+│   │       ├── ['Ag', 'SiO2', 'TiO2'].png
+│   │       └── ['Ag', 'TiO2'].png
+│   └── materialData/
+│       ├── Ag.txt
+│       ├── Au(2).txt
+│       ├── Au.txt
+│       ├── Bi2Se3.txt
+│       ├── CaF2.txt
+│       ├── Cu2S.txt
+│       ├── Ge(1).txt
+│       ├── Ge(2).txt
+│       ├── Ge(2Z).txt
+│       ├── Ge(Z).txt
+│       ├── MgF2.txt
+│       ├── MoS2.txt
+│       ├── SiO2.txt
+│       ├── TiO2(1).txt
+│       ├── TiO2(2).txt
+│       ├── TiO2(Z).txt
+│       ├── TiO2.txt
+│       ├── VO2.txt
+│       └── ZnS.txt
+├── data/
+│   ├── __init__.py
+│   ├── api/
+│   ├── repository/
+│   └── static/
+│       └── vasp.py
+├── database/
+│   ├── __init__.py
+│   ├── __pycache__/
+│   │   ├── __init__.cpython-310.pyc
+│   │   ├── config.cpython-310.pyc
+│   │   ├── connection.cpython-310.pyc
+│   │   └── modles.cpython-310.pyc
+│   ├── config.py
+│   ├── connection.py
+│   ├── modles.py
+│   ├── test.ipynb
+│   └── test.py
+├── main.py
+├── model/
+│   ├── __init__.py
+│   ├── __pycache__/
+│   │   ├── __init__.cpython-310.pyc
+│   │   ├── documentProcessing.cpython-310.pyc
+│   │   └── qwenModel.cpython-310.pyc
+│   ├── documentProcessing.py
+│   ├── file_tree.txt
+│   ├── qwenModel.py
+│   ├── test.ipynb
+│   ├── test.py
+│   └── tools.py
+├── routers/
+│   ├── __init__.py
+│   ├── __pycache__/
+│   │   ├── __init__.cpython-310.pyc
+│   │   ├── images.cpython-310.pyc
+│   │   └── param.cpython-310.pyc
+│   ├── images.py
+│   └── param.py
+├── test/
+│   └── __init__.py
+├── test.py
+└── utils/
+    ├── CalculatedMaterials.py
+    ├── Material.py
+    ├── MaterialTool.py
+    ├── __init__.py
+    ├── __pycache__/
+    │   ├── CalculatedMaterials.cpython-310.pyc
+    │   ├── Material.cpython-310.pyc
+    │   ├── MaterialTool.cpython-310.pyc
+    │   ├── __init__.cpython-310.pyc
+    │   ├── lifespan.cpython-310.pyc
+    │   └── readDocument.cpython-310.pyc
+    ├── lifespan.py
+    └── readDocument.py

@@ -163,7 +163,7 @@ class MaterialTool:
         fit_error = []
         mathod=MaterialTool.create_method_mapping()[method]
         if all_plot_data:
-            plt.figure(figsize=(12, 3 * 6))
+            plt.figure(figsize=(12, sm * 6))
         for i in composites.values():
             data_error={}
             data = i.get_data()
@@ -321,10 +321,7 @@ class MaterialTool:
         for i in composites.values():
             i.set_thickness(optimal_thickness[n])
             n += 1
-        _, _, A = MaterialTool.composites_calculate_rt_tmm(
-            composites,
-            wl,
-        )
+        _, _, A,_ = MaterialTool.composites_calculate_rt_tmm(composites,wl)
         target_function = np.sum((A - target) ** 2)
         return target_function
 
@@ -342,10 +339,7 @@ class MaterialTool:
         for i in composites.values():
             i.set_thickness(optimal_thickness[n])
             n += 1
-        _, T, _ = MaterialTool.composites_calculate_rt_tmm(
-            composites,
-            wl,
-        )
+        _, T, _,_ = MaterialTool.composites_calculate_rt_tmm(composites,wl)
         target_function = np.sum((T - target) ** 2)
         return target_function
 

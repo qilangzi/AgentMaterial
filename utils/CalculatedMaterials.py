@@ -12,8 +12,12 @@ class CalculatedMaterials:
         self.__common_wl = np.linspace(self.wl[0], self.wl[1], self.wl[2])
         pass
 
-    def calculate_fit_data(self, number_polyfit:list[int],method:str):
-        solution_fit,zipped=MT.fit_composites(method, self.__composites, self.__common_wl, number_polyfit, True)
+    def calculate_fit_data(self, number_polyfit:list[int],method:str,sub_composites:list|None=None):
+        if sub_composites is not None:
+            composites = {i: self.__composites[i] for i in sub_composites}
+            solution_fit,zipped= MT.fit_composites(method, composites, self.__common_wl, number_polyfit, True)
+        else:
+            solution_fit,zipped=MT.fit_composites(method, self.__composites, self.__common_wl, number_polyfit, True)
         return solution_fit,zipped
 
     def calculate_tmm_DE(self,bounds:list):
