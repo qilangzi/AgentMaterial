@@ -1,4 +1,5 @@
 import base64
+import datetime
 import os.path
 from sqlalchemy import func
 from openai import OpenAI
@@ -15,7 +16,12 @@ class QwenModel:
     def __init__(self, api_key, base_url):
         self.api_key = api_key
         self.base_url = base_url
-        self.__messages = []
+        self.__messages = [{
+            "role": "system",
+            "content": """你是一个很有帮助的助手。如果用户提问找一种满足某些光学性质的二维纳米复合薄膜材料，请调用 ‘nalysis_model’ 函数;
+     如果用户提问关于时间的问题，请调用‘get_current_time’函数。
+     请以友好的语气回答问题。"""
+        }]
         self.client = AsyncOpenAI(
             api_key=self.api_key,
             base_url=self.base_url
@@ -292,7 +298,52 @@ class QwenModel:
             db.commit()
             print(f'{i}向量化完毕')
 
+    async def get_current_time(self):
+        """
+        获取当前时间
+        :return: 当前时间
+        """
+        current_time = datetime.datetime.now()
+        return current_time
+
+    async def toolbox(self, function_name, arguments_string):
+        arguments = json.loads(arguments_string)
+        function_mapper = {
+            "analysis_model": self.analysis_model,
+            "get_current_time": self.get_current_time
+        }
+        try:
+            result = function_mapper[function_name](**arguments)
+            return result
+        except KeyError:
+            return f"Function '{function_name}' not found."
+
     async def communication_model(self, qw_model_name: str, deepmind: bool = False, stream: bool = False):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_time",
+                    "description": "当你想知道现在的时间时非常有用。",
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "analysis_model",
+                    "description": "当用户需要你帮他预测二维复合薄膜材料的光学性质时调用，一般需要计算材料的反射率，折射率和吸收率有关。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "full_content": {
+                                "type": "string",
+                                "description": "用户对二维复合薄膜材料的光学性质期望是什么，原话放入即可",
+                            }
+                        },
+                        "required": ["location"]
+                    }
+                }
+            }]
         if deepmind:
             turn = 1
             while True:
@@ -459,10 +510,11 @@ class QwenModel:
                 fit_messages.append({'role': 'user', 'content': f'{json.dumps(zdict)}'})
         return fit_messages
 
-    def encode_image(self,image_path):
+    def encode_image(self, image_path):
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
-    async def fit_evaluation(self, qw_model_name: str, img_path:str,zipped:dict):
+
+    async def fit_evaluation(self, qw_model_name: str, img_path: str, zipped: dict):
         """
         这是一个拟合的助手将上一个预测助手预测的材料进行拟合计算，
         :param qw_model_name: 模型名字
@@ -518,23 +570,23 @@ class QwenModel:
         base64_image = self.encode_image(image_path=img_path)
         zdict = {'fit_num': 1, 'data': zipped}
         fit_messages = [
-                        {
-                            "role": "system",
-                            "content": [{"type":"text","text": system}]},
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image_url",
-                                    # 需要注意，传入Base64，图像格式（即image/{format}）需要与支持的图片列表中的Content Type保持一致。"f"是字符串格式化的方法。
-                                    # PNG图像：  f"data:image/png;base64,{base64_image}"
-                                    # JPEG图像： f"data:image/jpeg;base64,{base64_image}"
-                                    # WEBP图像： f"data:image/webp;base64,{base64_image}"
-                                    "image_url": {"url": f"data:image/png;base64,{base64_image}"},
-                                },
-                                {"type": "text", "text":f'拟合误差指标{zdict},结合图片进行评价'},
-                            ],
-                        }]
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": system}]},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        # 需要注意，传入Base64，图像格式（即image/{format}）需要与支持的图片列表中的Content Type保持一致。"f"是字符串格式化的方法。
+                        # PNG图像：  f"data:image/png;base64,{base64_image}"
+                        # JPEG图像： f"data:image/jpeg;base64,{base64_image}"
+                        # WEBP图像： f"data:image/webp;base64,{base64_image}"
+                        "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                    },
+                    {"type": "text", "text": f'拟合误差指标{zdict},结合图片进行评价'},
+                ],
+            }]
         qw = await self.client.chat.completions.create(
             model=qw_model_name,
             messages=fit_messages,
@@ -546,10 +598,10 @@ class QwenModel:
         # 获取 token 使用情况
         total_tokens = qw.usage.total_tokens if hasattr(qw, 'usage') else None
         json_data = self.content_to_json(json_content)
-        print(json_data)
-        return json_data,total_tokens
+        # print(json_data)
+        return json_data, total_tokens
 
-    async def fit_Agent(self,qw_model_name: str,qw_model_vl_name: str,CM: CalculatedMaterials):
+    async def fit_Agent(self, qw_model_name: str, qw_model_vl_name: str, CM: CalculatedMaterials):
         system = """
                 你是一个数据拟合的助手，用户会提供拟合的参考数据给你，根据这些数据和意见，调用用户写好的拟合方法和调整拟合参数，来拟合数据以达到用户要求
                 开始阶段(第一次输出阶段)：用户输入：开始拟合。你拟合输入的初始参数是number_polyfit:list[int]=[3]（列表目前只有一个参数），它是拟合的必要参数可以控制拟合的效果,
@@ -592,6 +644,7 @@ class QwenModel:
             {'role': 'system', 'content': f'{system}'},
             {'role': 'user', 'content': f'开始拟合'},
         ]
+        logtext = ''
         nt = 1
         total_tokens = 0
         sub_composites = []
@@ -602,38 +655,81 @@ class QwenModel:
                 response_format={"type": "json_object"}
             )
             json_content = qw.choices[0].message.content
-            print(json_content)
+            logtext += f'{json_content}+\n'
+            # print(json_content)
             fit_messages.append({'role': 'assistant', 'content': json_content})
+
             # 获取 token 使用情况
             json_data1 = self.content_to_json(json_content)
-            img_path,zipped=CM.calculate_fit_data(number_polyfit=[json_data1['number_polyfit']],
-                                                  method=json_data1['method'],
-                                                  sub_composites=sub_composites)
+            solution_fit, zipped = CM.calculate_fit_data(number_polyfit=json_data1['number_polyfit'],
+                                                         method=json_data1['method'],
+                                                         sub_composites=sub_composites)
+            img1_path = f'content/image_temp/fit_image/{solution_fit}'
             # 拟合评价
-            json_data,total_tokens1 = await self.fit_evaluation(qw_model_name=qw_model_name,img_path=img_path,zipped=zipped)
+            json_data, total_tokens1 = await self.fit_evaluation(qw_model_name=qw_model_vl_name, img_path=img1_path,
+                                                                 zipped=zipped)
             total_tokens = total_tokens + total_tokens1 + qw.usage.total_tokens if hasattr(qw, 'usage') else None
-            sub_composites=[]
-            evaluation={}
+            logtext += f'{json_data}+\n'
+            # print(json_data)
+            sub_composites = []
+            evaluation = {}
             for i in json_data:
                 for j in json_data[i]:
                     if not json_data[i][j]['evaluation']:
                         sub_composites.append(i)
-            sub_composites=list(set(sub_composites))
+            sub_composites = list(set(sub_composites))
             for i in sub_composites:
-                evaluation[i]=json_data[i]
-            if len(sub_composites)==0:
+                evaluation[i] = json_data[i]
+            if len(sub_composites) == 0 or nt == 3:
                 break
             else:
-                nt+=1
+                nt += 1
                 fit_messages.append({'role': 'user',
                                      'content': f'开始第{nt}次拟合，需要重新拟合材料为{sub_composites}，根据你选用的拟合方法和参数，用户拟合建议和评价为{evaluation}'})
+                print(
+                    f'开始第{nt}次拟合，需要重新拟合材料为{sub_composites}，根据你选用的拟合方法和参数，用户拟合建议和评价为{evaluation}')
+        return logtext, total_tokens
 
+    async def choose_method_model(self, qw_model_name: str, full_content: str):
+        system = """
+                你是一个材料工程师，你需要根据用户对的材料期望，选择一个符合策略来计算。目前已有的策略为[calculate_tmm_DE_T,calculate_tmm_DE_A]
+                calculate_tmm_DE_T策略为计算材料光学性质时和透过率相关时选用。
+                calculate_tmm_DE_A策略为计算材料光学性质时和吸收率相关时选用。
+                如果用户的需求和透过率和吸收率都相关时，你需要选择占主要的因素，如果透过率占主要选择calculate_tmm_DE_T，如果吸收率占主要选择calculate_tmm_DE_A
+                ，需要以json的格式返回键为method,你选择的策略为值。
+                光学性质一般满足：透过率+反射率+吸收率=1
+                例如：
+                Q:帮我预测一个可见光高透过，红外光低透过的材料模型
+                A:{'method':'calculate_tmm_T}
+                
+                Q:帮我预测一个光热性质好的材料模型，在全波段吸收都高
+                A:{'method':'calculate_tmm_A}
+                
+                Q:我需要构建一个智能窗，帮我预测一个可见光高透过，红外光高反射和吸收的材料模型
+                A:{'method':'calculate_tmm_T}
+                """
+        messages = [
+            {'role': 'system', 'content': f'{system}'},
+            {'role': 'user', 'content': f'{full_content}'},
+        ]
+        qw = await self.client.chat.completions.create(
+            model=qw_model_name,
+            messages=messages,
+            response_format={"type": "json_object"},
 
-    async def analysis_model(self, qw_model_name: str,
-                             qw_model_format_name: str,
-                             qw_model_fit_name: str,
-                             qw_model_evaluation_name: str,
-                             full_content: str,
+        )
+        json_content = qw.choices[0].message.content
+        json_data = self.content_to_json(json_content)
+        tokens = qw.usage.total_tokens if hasattr(qw, 'usage') else None
+        return json_data, tokens
+
+    async def analysis_model(self,full_content: str,
+                             qw_model_name: str = 'qwen-plus',
+                             qw_model_choose_name: str = 'qwen-plus',
+                             qw_model_format_name: str = 'qwen-plus',
+                             qw_model_fit_name: str = 'qwen-plus',
+                             qw_model_vl_name: str = "qwen-vl-max-latest",
+                             qw_model_evaluation_name: str = "qwen-vl-max-latest",
                              deepmind: bool = False):
         system = """
 你是一个材料工程师，负责开发二维纳米复合薄膜材料，你会根据用户的要求构建一个材料的初始模型（该初始模型有层状材料组成成分，
@@ -678,6 +774,11 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
             {'role': 'user', 'content': f'构建的初始材料模型需要满足{full_content}'},
         ]
         turn = 1
+
+        #  选择计算策略
+        method_choose, tokens = self.choose_method_model(qw_model_choose_name, full_content)
+        log = log + f'选择的计算策略是{method_choose}'
+
         if deepmind:
             while True:
                 reasoning_content = ""  # 定义完整思考过程
@@ -717,34 +818,26 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                                          set_thickness=set_thickness,
                                          wl=json_content1['wl'])
 
-
-
-
-                img1_path = f'../content/image_temp/fit_image/{solution_fit}'
-
-
-
                 # 开始拟合
-                # fit_message = self.fit_format(qw_model_name=qw_model_fit_name,
-                #                               CM=CM)
-                fit_massage = self.fit_evaluation(qw_model_name=qw_model_fit_name, img_path=img1_path, zipped=zipped)
+                logtext, fit_total_tokens = await self.fit_Agent(qw_model_name=qw_model_fit_name,
+                                                                 qw_model_vl_name=qw_model_vl_name, CM=CM)
 
-
-                log = log + "\n" + f"第{turn}拟合材料" + "\n" + f'{fit_massage}' + '\n'
+                log = log + "\n" + f"第{turn}次拟合材料阶段" + "\n" + f'{logtext}' + '\n'
 
                 # 光学性能计算
-                optimal_thickness, R, T, A, img_url = CM.calculate_tmm_DE(json_content1['set_thickness'])
+
+                optimal_thickness, R, T, A, img_url = CM.calculate_methods(method_choose['method'],
+                                                                           json_content1['set_thickness'])
 
                 # 判断材料模型是否满足预期
-                json_content2, total_tokens2 = self.evaluation_model(qw_model_name=qw_model_evaluation_name,
+                json_content2, total_tokens2 = self.evaluation_model(qw_model_vl_name=qw_model_evaluation_name,
                                                                      full_content=full_content, path=img_url)
                 evaluation_json = self.content_to_json(json_content2)
                 log = log + '\n' + f"第{turn}评估" + '\n' + f'{evaluation_json}' + '\n'
+
                 if evaluation_json['evaluation'] or turn == 5:
                     break
                 else:
-                    file_object = await self.client.files.create(file=Path(img_url), purpose="file-extract")
-                    messages.append({'role': 'user', 'content': f'fileid://{file_object.id}'})
                     advice = evaluation_json['advice']
                     messages.append(
                         {'role': 'user', 'content': f'{advice},根据以上建议和计算的图像结果重新预测材料基础模型'})
@@ -761,6 +854,7 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                 log = log + "\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n" + assistant_content
                 turn += 1
                 messages.append({"role": "assistant", "content": assistant_content})
+
                 # 开始计算，获取json数据
                 json_content, total_tokens = self.communication_format(qw_model_name=qw_model_format_name,
                                                                        full_content=answer_content)
@@ -773,43 +867,54 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                                          wl=json_content1['wl'])
 
                 # 开始拟合
-                fit_message = self.fit_format(qw_model_name=qw_model_fit_name,
-                                              CM=CM)
-                log = log + "\n" + f"第{turn}拟合材料" + "\n" + f'{fit_message}' + '\n'
+                logtext, fit_total_tokens = await self.fit_Agent(qw_model_name=qw_model_fit_name,
+                                                                 qw_model_vl_name=qw_model_vl_name, CM=CM)
+
+                log = log + "\n" + f"第{turn}次拟合材料阶段" + "\n" + f'{logtext}' + '\n'
 
                 # 光学性能计算
-                optimal_thickness, R, T, A, img_url = CM.calculate_tmm_DE(json_content1['set_thickness'])
+                optimal_thickness, R, T, A, img_url = CM.calculate_methods(method_choose['method'],
+                                                                           json_content1['set_thickness'])
 
                 # 判断材料模型是否满足预期
-                json_content2, total_tokens2 = self.evaluation_model(qw_model_name=qw_model_evaluation_name,
+                json_content2, total_tokens2 = self.evaluation_model(qw_model_vl_name=qw_model_evaluation_name,
                                                                      full_content=full_content, path=img_url)
                 evaluation_json = self.content_to_json(json_content2)
                 log = log + '\n' + f"第{turn}评估" + '\n' + f'{evaluation_json}' + '\n'
-                if not evaluation_json['evaluation'] and turn != 5:
-                    file_object = await self.client.files.create(file=Path(img_url), purpose="file-extract")
-                    messages.append({'role': 'user', 'content': f'fileid://{file_object.id}'})
+                if evaluation_json['evaluation'] or turn == 5:
+                    break
+                else:
                     advice = evaluation_json['advice']
                     messages.append(
                         {'role': 'user', 'content': f'{advice},根据以上建议和计算的图像结果重新预测材料基础模型'})
                     turn += 1
                     print(log, end='', flush=True)
-                else:
-                    break
 
-    async def evaluation_model(self, qw_model_name: str, full_content: str, path: str):
+    async def evaluation_model(self, qw_model_vl_name: str, full_content: str, path: str):
         system = """
         你是一个复合薄膜材料工程师助手，现在用户会构建一个初始的复合材料模型，对这个材料的光学性能有一定的性能期望，他会通过计算
-        得到材料的光学性能参数在不同波长下的透过率，吸收率和反射率。你需要根据用户提供的计算数据判断，是否符合用户对材料的光学性能
+        得到材料的光学性能参数在不同波长下的透过率，吸收率和反射率。你需要根据用户提供的计算数据判断是否符合用户对材料的光学性能
         期望，如果基本满足条件你就在'evaluation'键的值填写True,不满足就填False。你可以在'advice'键的值中写你的建议,尽量详细点
         如果不好给出修改建议。以json的格式输出内容。输出形式为{'evaluation'：类型：bool,'advice'：你的建议，类型：str}
+        1.图像基本满足用户对材料的光学期望即可，图像的趋势基本符合即可，不要要求太高
         """
-        file_object = await self.client.files.create(file=Path(path), purpose="file-extract")
+        base64_image = self.encode_image(path)
         completion = await self.client.chat.completions.create(
-            model=qw_model_name,
+            model=qw_model_vl_name,
             messages=[
-                {'role': 'system', 'content': f'{system}'},
-                {'role': 'user', 'content': f'fileid://{file_object.id}'},
-                {'role': 'user', 'content': f'用户预期为：{full_content}'},
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": system}]},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                        },
+                        {"type": "text", "text": f'{full_content}'},
+                    ],
+                }
             ],
             response_format={"type": "json_object"}
         )

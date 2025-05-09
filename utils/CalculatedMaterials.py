@@ -12,15 +12,15 @@ class CalculatedMaterials:
         self.__common_wl = np.linspace(self.wl[0], self.wl[1], self.wl[2])
         pass
 
-    def calculate_fit_data(self, number_polyfit:list[int],method:str,sub_composites:list|None=None):
-        if sub_composites is not None:
+    def calculate_fit_data(self, number_polyfit:list[int],method:str,sub_composites:list):
+        if sub_composites:
             composites = {i: self.__composites[i] for i in sub_composites}
             solution_fit,zipped= MT.fit_composites(method, composites, self.__common_wl, number_polyfit, True)
         else:
             solution_fit,zipped=MT.fit_composites(method, self.__composites, self.__common_wl, number_polyfit, True)
         return solution_fit,zipped
 
-    def calculate_tmm_DE(self,bounds:list):
+    def calculate_tmm_DE_T(self, bounds:list):
         composites = MT.build_composites_set(self.__composites, self.set_thickness)
         MT.set_thickness_method(composites, self.set_thickness)
         # R,T,A=MT.composites_calculate_rt_tmm(composites, self.__common_wl)
@@ -30,7 +30,15 @@ class CalculatedMaterials:
         R, T, A,img_url = MT.composites_calculate_rt_tmm(composites,self.__common_wl, plot1=True)
         return optimal_thickness,R, T, A, img_url
 
-
-
+    def calculate_tmm_DE_A(self, bounds:list):
+        composites = MT.build_composites_set(self.__composites, self.set_thickness)
+        MT.set_thickness_method(composites, self.set_thickness)
+        pass
+    def calculate_methods(self, method:str,bounds:list):
+        methods={
+            'calculate_tmm_DE_T':self.calculate_tmm_DE_T,
+            'calculate_tmm_DE_A':self.calculate_tmm_DE_A,
+        }
+        return methods[method](bounds)
 
 

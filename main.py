@@ -31,14 +31,12 @@ if __name__=='__main__':
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
         )
         CM=CalculatedMaterials(
-            build_composites=['SiO2', 'MoS2', 'TiO2'],
+            build_composites=['TiO2', 'MoS2', 'SiO2'],
             set_thickness=[50,20,50],
             wl=[200, 1200, 1000]
         )
         # message=await qw.fit_format(qw_model_name="qwen-plus",CM=CM)
-        solution_fit, zipped = CM.calculate_fit_data(number_polyfit=[3], method='interpolite_composites')
-        img1_path = f'content/image_temp/fit_image/{solution_fit}'
-        jsondata,tokens= await qw.fit_evaluation(qw_model_name='qwen-vl-max-latest', img_path=img1_path, zipped=zipped)
+        await qw.fit_Agent(qw_model_name="qwen-plus", qw_model_vl_name="qwen-vl-max-latest", CM=CM)
         await qw.client.close()
     asyncio.run(main())
 

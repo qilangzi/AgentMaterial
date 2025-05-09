@@ -20,7 +20,7 @@ class MaterialTool:
         """
         return {
             "interpolite_composites": MaterialTool.interpolite_composites,
-            "fit_composites": MaterialTool.fit_composites,
+            "plot_composites": MaterialTool.plot_composites
         }
     @staticmethod
     def composites_calculate_rt_tmm(composites: dict, wl, n_air: int = 1, plot1: bool = False):
