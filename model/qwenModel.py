@@ -304,19 +304,44 @@ class QwenModel:
         :return: 当前时间
         """
         current_time = datetime.datetime.now()
-        return current_time
+        formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        return formatted_time
 
     async def toolbox(self, function_name, arguments_string):
-        arguments = json.loads(arguments_string)
+        if type(arguments_string) == str:
+            arguments=json.loads(arguments_string)
+        else:
+            arguments = arguments_string
         function_mapper = {
             "analysis_model": self.analysis_model,
             "get_current_time": self.get_current_time
         }
         try:
-            result = function_mapper[function_name](**arguments)
+            result = await function_mapper[function_name](**arguments)
             return result
         except KeyError:
             return f"Function '{function_name}' not found."
+
+    def Assistant_update(self, tool_calls, Assistant: dict, sk: int):
+        for tool_call in tool_calls:
+            # tool_call=chunk.choices[0].delta.tool_calls[0]
+            if tool_call.index is not None and tool_call.index != sk:
+                # print(tool_call.index)
+                data = {}
+                data['index'] = tool_call.index
+                data['id'] = tool_call.id
+                data['type'] = tool_call.type
+                data['function'] = {'arguments': tool_call.function.arguments, 'name': tool_call.function.name}
+                # print(data)
+                Assistant['tool_calls'].append(data)
+                sk = tool_call.index
+            else:
+                if tool_call is not None:
+                    Assistant['tool_calls'][tool_call.index]['function'][
+                        'arguments'] += tool_call.function.arguments if tool_call.function.arguments is not None else ""
+                else:
+                    pass
+        return Assistant, sk
 
     async def communication_model(self, qw_model_name: str, deepmind: bool = False, stream: bool = False):
         tools = [
@@ -325,6 +350,7 @@ class QwenModel:
                 "function": {
                     "name": "get_current_time",
                     "description": "当你想知道现在的时间时非常有用。",
+                    "parameters": {}
                 }
             },
             {
@@ -340,13 +366,23 @@ class QwenModel:
                                 "description": "用户对二维复合薄膜材料的光学性质期望是什么，原话放入即可",
                             }
                         },
-                        "required": ["location"]
+                        "required": ["full_content"]  #parameters下
                     }
                 }
-            }]
+            }
+        ]
         if deepmind:
             turn = 1
             while True:
+                Assistant = {
+                    "content": "",
+                    "refusal": None,
+                    "role": "assistant",
+                    "audio": None,
+                    "function_call": None,
+                    "tool_calls": [
+                    ],
+                }
                 reasoning_content = ""  # 定义完整思考过程
                 answer_content = ""  # 定义完整回复
                 is_answering = False  # 判断是否结束思考过程并开始回复
@@ -354,6 +390,7 @@ class QwenModel:
                 if user_input == "bye":
                     break
                 self.__messages.append({"role": "user", "content": user_input})
+
                 completion = await self.client.chat.completions.create(
                     model=qw_model_name,  # 此处以 qwq-32b 为例，可按需更换模型名称
                     messages=self.__messages,
@@ -362,8 +399,12 @@ class QwenModel:
                     # 解除以下注释会在最后一个chunk返回Token使用量
                     stream_options={
                         "include_usage": True
-                    }
+                    },
+                    tools=tools,
+                    parallel_tool_calls=True
                 )
+                sk = -1
+                tooluse = False
                 print("\n" + "=" * 20 + f"第{turn}思考过程" + "=" * 20 + "\n")
                 async for chunk in completion:
                     if not chunk.choices:
@@ -377,17 +418,85 @@ class QwenModel:
                             print(delta.reasoning_content, end='', flush=True)
                             reasoning_content += delta.reasoning_content
                         else:
-                            if delta.content != "" and is_answering is False:
+                            if chunk.choices[0].delta.tool_calls:  #使用工具
+                                tooluse = True
+                                tool_calls = chunk.choices[0].delta.tool_calls
+                                Assistant, sk = self.Assistant_update(tool_calls, Assistant, sk)
+
+                            if not is_answering:
                                 print("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n")
                                 is_answering = True
                                 # 打印回复过程
-                            print(delta.content, end='', flush=True)
-                            answer_content += str(delta.content) if delta.content is not None else ""
+                            if chunk.choices[0].delta.content != "":
+                                print(chunk.choices[0].delta.content, end='', flush=True)
+                                answer_content += str(delta.content) if delta.content is not None else ""
+                turn += 1
+                while tooluse:
+                    print('\n" + "=" * 20 + f"使用工具" + "=" * 20 + "\n')
+                    self.__messages.append(Assistant)
+                    for i in Assistant["tool_calls"]:
+                        function_name = i['function']['name']
+                        print(f'\n使用工具：{function_name}\n')
+                        function_args = i["function"]['arguments']
+                        tool_call_id = i['id']
+                        function_output = await self.toolbox(function_name, function_args)
+                        self.__messages.append({"role": "tool", "tool_call_id": tool_call_id,
+                                                "content": function_output})
+                    completion = await self.client.chat.completions.create(
+                        model=qw_model_name,  # 此处以 qwq-32b 为例，可按需更换模型名称
+                        messages=self.__messages,
+                        stream=True,
+                        stream_options={
+                            "include_usage": True
+                        },
+                        tools=tools,
+                    )
+                    Assistant = {
+                        "content": "",
+                        "refusal": None,
+                        "role": "assistant",
+                        "audio": None,
+                        "function_call": None,
+                        "tool_calls": [
+                        ],
+                    }
+                    sk = -1
+                    tooluse = False
+                    async for chunk in completion:
+                        if not chunk.choices:
+                            print('\nUsage:')
+                            print(chunk.usage)
+                        else:
+                            delta = chunk.choices[0].delta
+                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                                reasoning_content += delta.reasoning_content
+                                print(delta.reasoning_content, end="", flush=True)
+                            else:
+                                if chunk.choices[0].delta.tool_calls:  # 使用工具
+                                    tooluse = True
+                                    tool_calls = chunk.choices[0].delta.tool_calls
+                                    Assistant, sk = self.Assistant_update(tool_calls, Assistant, sk)
+                                if not is_answering:
+                                    print("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n")
+                                    is_answering = True
+                                    # 打印回复过程
+                                if chunk.choices[0].delta.content != "":
+                                    print(chunk.choices[0].delta.content, end='', flush=True)
+                                    answer_content += str(delta.content) if delta.content is not None else ""
                 self.__messages.append({"role": "assistant", "content": answer_content})
         else:
             if stream:
                 turn = 1
                 while True:
+                    Assistant = {
+                        "content": "",
+                        "refusal": None,
+                        "role": "assistant",
+                        "audio": None,
+                        "function_call": None,
+                        "tool_calls": [
+                        ],
+                    }
                     answer_content = ""  # 定义完整回复
                     is_answering = False  # 判断是否结束思考过程并开始回复
                     user_input = input("请输入：\n")
@@ -400,21 +509,80 @@ class QwenModel:
                         stream=True,
                         stream_options={
                             "include_usage": True
-                        }
+                        },
+                        tools=tools,
+                        parallel_tool_calls=True
                     )
+                    sk = -1
+                    tooluse = False
                     async for chunk in completion:
                         if not chunk.choices:
                             print('\nUsage:')
                             print(chunk.usage)
                         else:
-                            delta = chunk.choices[0].delta
-                            if delta.content != "" and is_answering is False:
+                            #是否使用工具
+                            if chunk.choices[0].delta.tool_calls:  #使用工具
+                                tooluse = True
+                                tool_calls = chunk.choices[0].delta.tool_calls
+                                Assistant, sk = self.Assistant_update(tool_calls, Assistant, sk)
+
+                            if not is_answering:
                                 print("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n")
                                 is_answering = True
                                 # 打印回复过程
-                            print(delta.content, end='', flush=True)
-                            answer_content += str(delta.content) if delta.content is not None else ""
+                            if chunk.choices[0].delta.content!="":
+                                print(chunk.choices[0].delta.content, end='', flush=True)
+                                delta = chunk.choices[0].delta
+                                answer_content += str(delta.content) if delta.content is not None else ""
                     turn += 1
+                    while tooluse:
+                        print('\n" + "=" * 20 + f"使用工具" + "=" * 20 + "\n')
+                        self.__messages.append(Assistant)
+                        for i in Assistant["tool_calls"]:
+                            function_name = i['function']['name']
+                            print(f'\n使用工具：{function_name}\n')
+                            function_args = i["function"]['arguments']
+                            tool_call_id = i['id']
+                            function_output = await self.toolbox(function_name, function_args)
+                            self.__messages.append({"role": "tool", "tool_call_id": tool_call_id,
+                                                    "content": function_output})
+                        completion = await self.client.chat.completions.create(
+                            model=qw_model_name,  # 此处以 qwq-32b 为例，可按需更换模型名称
+                            messages=self.__messages,
+                            stream=True,
+                            stream_options={
+                                "include_usage": True
+                            },
+                            tools=tools,
+                        )
+                        Assistant = {
+                            "content": "",
+                            "refusal": None,
+                            "role": "assistant",
+                            "audio": None,
+                            "function_call": None,
+                            "tool_calls": [
+                            ],
+                        }
+                        sk = -1
+                        tooluse = False
+                        async for chunk in completion:
+                            if not chunk.choices:
+                                print('\nUsage:')
+                                print(chunk.usage)
+                            else:
+                                if chunk.choices[0].delta.tool_calls:  # 使用工具
+                                    tooluse = True
+                                    tool_calls = chunk.choices[0].delta.tool_calls
+                                    Assistant, sk = self.Assistant_update(tool_calls, Assistant, sk)
+                                if not is_answering:
+                                    print("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n")
+                                    is_answering = True
+                                    # 打印回复过程
+                                if chunk.choices[0].delta.content != "":
+                                    print(chunk.choices[0].delta.content, end='', flush=True)
+                                    delta = chunk.choices[0].delta
+                                    answer_content += str(delta.content) if delta.content is not None else ""
                     self.__messages.append({"role": "assistant", "content": answer_content})
             else:
                 while True:
@@ -426,8 +594,28 @@ class QwenModel:
                     completion = await self.client.chat.completions.create(
                         model=qw_model_name,  # 此处以 qwq-32b 为例，可按需更换模型名称
                         messages=self.__messages,
+                        tools=tools,
+                        parallel_tool_calls=True
                     )
                     assistant_content = completion.choices[0].message.content
+                    print(assistant_content)
+                    while completion.choices[0].message.tool_calls:
+                        print('\n调用工具成功\n')
+                        self.__messages.append(completion.choices[0].message)
+                        for i in completion.choices[0].message.tool_calls:
+                            function_name = i.function.name
+                            print(f'\n使用工具：{function_name}\n')
+                            arguments = json.loads(i.function.arguments)
+                            tool_call_id = i.id
+                            function_output = await self.toolbox(function_name, arguments)
+                            self.__messages.append({"role": "tool", "tool_call_id": tool_call_id,
+                                                    "content": function_output})
+                        completion = await self.client.chat.completions.create(
+                            model=qw_model_name,  # 此处以 qwq-32b 为例，可按需更换模型名称
+                            messages=self.__messages,
+                            tools=tools,
+                        )
+                        assistant_content = completion.choices[0].message.content
                     print("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n")
                     print(assistant_content)
                     turn += 1
@@ -461,64 +649,16 @@ class QwenModel:
 
         return json_content, total_tokens
 
-    async def fit_format(self, qw_model_name: str, CM: CalculatedMaterials):
-        """
-        这是一个拟合的助手将上一个预测助手预测的材料进行拟合计算，
-        :param qw_model_name: 模型名字
-        :param CM：材料模型
-        :return:
-        """
-        system = """
-        你是一个数据拟合的助手，用户会提供拟合的参考数据给你，根据这些数据和意见，调用用户写好的拟合方法和调整拟合参数，来拟合数据以达到用户要求
-        开始阶段(第一次输出阶段)：你拟合输入的初始参数是number_polyfit:list[int]=[3]（列表目前只有一个参数），它是拟合的必要参数可以控制拟合的效果,
-                    选择的拟合方法是method="interpolite_composites",在result中说明你的选参数原因（第一次默认为‘默认值’）。
-        要求：
-         1. 以json的格式输出你的数据,例如:{'number_polyfit':[3]','method':'interpolite_composites','result':'默认值'} 多次反馈拟合阶段(后续阶段)：
-         2.可以使用的拟合方法有["interpolite_composites","plot_composites"],你可以根据拟合结果的反馈选择合适的方法,。
-         3.你只需要在method填入方法的名字即可，你也可以使用动态调整number_polyfit的值,来达到不同的拟合效果，
-         4.result写明你选择参数的原因，
-
-          以json的格式输出你的数据,例如:{'number_polyfit':[根据反馈调整参数,类型为int]','method':'根据反馈调整参数,类型为str','result':'返回你更改的原因,类型为str'}
-        """
-
-        fit_messages = [
-            {'role': 'system', 'content': f'{system}'},
-            {'role': 'user', 'content': f'开始拟合'},
-        ]
-        nt = 1
-        while True:
-            qw = await self.client.chat.completions.create(
-                model=qw_model_name,
-                messages=fit_messages,
-                response_format={"type": "json_object"}
-            )
-            json_content = qw.choices[0].message.content
-            print(json_content)
-            fit_messages.append({'role': 'assistant', 'content': json_content})
-            # 获取 token 使用情况
-            total_tokens = qw.usage.total_tokens if hasattr(qw, 'usage') else None
-            json_data = self.content_to_json(json_content)
-
-            if json_data['fit_status'] == True:
-                print(f'拟合完成，消耗的token为:{total_tokens}')
-                break
-            else:
-                img_path, zipped = CM.calculate_fit_data(number_polyfit=json_data['number_polyfit'],
-                                                         method=json_data['method'])
-                zdict = {'fit_num': nt, 'data': zipped}
-                print(zdict)
-                fit_messages.append({'role': 'user', 'content': f'{json.dumps(zdict)}'})
-        return fit_messages
-
-    def encode_image(self, image_path):
+    def encode_imagetobase64(self, image_path):
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
 
     async def fit_evaluation(self, qw_model_name: str, img_path: str, zipped: dict):
         """
-        这是一个拟合的助手将上一个预测助手预测的材料进行拟合计算，
-        :param qw_model_name: 模型名字
-        :param CM：材料模型
+
+        :param qw_model_name:
+        :param img_path:
+        :param zipped:
         :return:
         """
         system = """
@@ -567,7 +707,7 @@ class QwenModel:
                  4.如果拟合曲线(红色拟合曲线)是一次的线性曲线是不可行的，直接在'evaluation'为False
                  5.除了json格式的数据以外不要有任何其他的返回内容
                """
-        base64_image = self.encode_image(image_path=img_path)
+        base64_image = self.encode_imagetobase64(image_path=img_path)
         zdict = {'fit_num': 1, 'data': zipped}
         fit_messages = [
             {
@@ -578,10 +718,6 @@ class QwenModel:
                 "content": [
                     {
                         "type": "image_url",
-                        # 需要注意，传入Base64，图像格式（即image/{format}）需要与支持的图片列表中的Content Type保持一致。"f"是字符串格式化的方法。
-                        # PNG图像：  f"data:image/png;base64,{base64_image}"
-                        # JPEG图像： f"data:image/jpeg;base64,{base64_image}"
-                        # WEBP图像： f"data:image/webp;base64,{base64_image}"
                         "image_url": {"url": f"data:image/png;base64,{base64_image}"},
                     },
                     {"type": "text", "text": f'拟合误差指标{zdict},结合图片进行评价'},
@@ -723,7 +859,7 @@ class QwenModel:
         tokens = qw.usage.total_tokens if hasattr(qw, 'usage') else None
         return json_data, tokens
 
-    async def analysis_model(self,full_content: str,
+    async def analysis_model(self, full_content: str,
                              qw_model_name: str = 'qwen-plus',
                              qw_model_choose_name: str = 'qwen-plus',
                              qw_model_format_name: str = 'qwen-plus',
@@ -776,7 +912,7 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
         turn = 1
 
         #  选择计算策略
-        method_choose, tokens = self.choose_method_model(qw_model_choose_name, full_content)
+        method_choose, tokens = await self.choose_method_model(qw_model_choose_name, full_content)
         log = log + f'选择的计算策略是{method_choose}'
 
         if deepmind:
@@ -898,7 +1034,7 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
         如果不好给出修改建议。以json的格式输出内容。输出形式为{'evaluation'：类型：bool,'advice'：你的建议，类型：str}
         1.图像基本满足用户对材料的光学期望即可，图像的趋势基本符合即可，不要要求太高
         """
-        base64_image = self.encode_image(path)
+        base64_image = self.encode_imagetobase64(path)
         completion = await self.client.chat.completions.create(
             model=qw_model_vl_name,
             messages=[

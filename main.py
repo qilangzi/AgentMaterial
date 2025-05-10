@@ -23,20 +23,24 @@ if __name__=='__main__':
 
     Base.metadata.create_all(bind=engine)
     async def main():
-        # await pdf_to_database(["qwen-long", "qwen-plus","text-embedding-v3"])
-        # await communication_model("qwq-plus",  deepmind=True, stream=False)
-        # await communication_format("qwen-plus",  deepmind=True, stream=False)
         qw=QwenModel(
             api_key="sk-568bd13551dd42ae9c623bd04504ba02",
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
         )
-        CM=CalculatedMaterials(
-            build_composites=['TiO2', 'MoS2', 'SiO2'],
-            set_thickness=[50,20,50],
-            wl=[200, 1200, 1000]
-        )
-        # message=await qw.fit_format(qw_model_name="qwen-plus",CM=CM)
-        await qw.fit_Agent(qw_model_name="qwen-plus", qw_model_vl_name="qwen-vl-max-latest", CM=CM)
+        # await pdf_to_database(["qwen-long", "qwen-plus","text-embedding-v3"])
+
+        await qw.communication_model("qwen-plus",  deepmind=False, stream=False)
+        # await qw.communication_model("qwq-plus", deepmind=True, stream=False)
+        # await communication_format("qwen-plus",  deepmind=True, stream=False)
+
+        #拟合材料
+        # CM=CalculatedMaterials(
+        #     build_composites=['TiO2', 'MoS2', 'SiO2'],
+        #     set_thickness=[50,20,50],
+        #     wl=[200, 1200, 1000]
+        # )
+        # await qw.fit_Agent(qw_model_name="qwen-plus", qw_model_vl_name="qwen-vl-max-latest", CM=CM)
+
         await qw.client.close()
     asyncio.run(main())
 
