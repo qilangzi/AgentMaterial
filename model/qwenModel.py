@@ -10,10 +10,10 @@ from database.connection import get_db
 from database.modles import *
 from sqlalchemy import and_
 from utils.CalculatedMaterials import CalculatedMaterials
-
+import logging
 
 class QwenModel:
-    def __init__(self, api_key, base_url):
+    def __init__(self, api_key, base_url,logger):
         self.api_key = api_key
         self.base_url = base_url
         self.__messages = [{
@@ -26,6 +26,7 @@ class QwenModel:
             api_key=self.api_key,
             base_url=self.base_url
         )
+        self.logger = logger
         pass
 
     async def material_model_prediction(self, qw_model_name: str, system: str, prompt: str):
@@ -309,7 +310,7 @@ class QwenModel:
 
     async def toolbox(self, function_name, arguments_string):
         if type(arguments_string) == str:
-            arguments=json.loads(arguments_string)
+            arguments = json.loads(arguments_string)
         else:
             arguments = arguments_string
         function_mapper = {
@@ -319,7 +320,8 @@ class QwenModel:
         try:
             result = await function_mapper[function_name](**arguments)
             return result
-        except KeyError:
+        except Exception as e:
+            print(e)
             return f"Function '{function_name}' not found."
 
     def Assistant_update(self, tool_calls, Assistant: dict, sk: int):
@@ -333,6 +335,7 @@ class QwenModel:
                 data['type'] = tool_call.type
                 data['function'] = {'arguments': tool_call.function.arguments, 'name': tool_call.function.name}
                 # print(data)
+                Assistant['tool_calls'].append(data)
                 Assistant['tool_calls'].append(data)
                 sk = tool_call.index
             else:
@@ -530,7 +533,7 @@ class QwenModel:
                                 print("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n")
                                 is_answering = True
                                 # 打印回复过程
-                            if chunk.choices[0].delta.content!="":
+                            if chunk.choices[0].delta.content != "":
                                 print(chunk.choices[0].delta.content, end='', flush=True)
                                 delta = chunk.choices[0].delta
                                 answer_content += str(delta.content) if delta.content is not None else ""
@@ -585,8 +588,8 @@ class QwenModel:
                                     answer_content += str(delta.content) if delta.content is not None else ""
                     self.__messages.append({"role": "assistant", "content": answer_content})
             else:
+                turn = 1
                 while True:
-                    turn = 1
                     user_input = input("请输入：\n")
                     if user_input == "bye":
                         break
@@ -632,6 +635,34 @@ class QwenModel:
        要求：
        1.  使用json格式返回数据。build_composites,set_thickness,wl,三个键，返回内容为列表形式
        2.  严格遵守用户要求，不要返回json以外的任何内容，便于用户后期调用
+    输出示例：
+    U:  为了设计一个在可见光波段（400-700 nm）具有高透过率，而在红外波段（700-2500 nm）具有高反射率和吸收率的复合薄膜结构，我们可以采用以下策略：
+        初始模型设计
+        材料选择：
+        可见光高透过层：使用透明的氧化物材料，如二氧化硅（SiO2），其在可见光波段具有高透过率。
+        红外反射层：使用金属材料，如银（Ag）或铝（Al），这些金属对红外波段有较高的反射率。
+        红外吸收层：使用半导体材料，如氧化铟锡（ITO）或氮化钛（TiN），这些材料在红外波段具有一定的吸收能力。
+        厚度范围：
+        SiO2层：[50, 200] nm （用于可见光高透过）
+        Ag层：[10, 50] nm （用于红外反射）
+        ITO层：[20, 100] nm （用于红外吸收）
+        结构构成机理分析
+        可见光高透过：SiO2层的主要功能是确保可见光波段的高透过率。由于其低折射率和低吸收系数，SiO₂能够在不显著衰减光强度的情况下让可见光通过。
+        红外高反射：Ag层能够有效地反射红外光。这是因为金属在红外波段通常表现出高反射率，且Ag的光学性能特别适合用于反射红外辐射。
+        红外高吸收：ITO层可以吸收部分红外光，从而减少红外光的透过。ITO作为一种透明导电氧化物，在红外波段具有一定的吸收特性，这有助于增强整体结构的红外吸收能力。
+        光学特性预测
+        透过率：
+        在可见光波段（400-700 nm），主要由SiO₂层决定，透过率预计可达到80%-95%。
+        在红外波段（700-2500 nm），透过率会显著降低，主要是因为Ag层的高反射和ITO层的吸收作用。
+        反射率：
+        在可见光波段，反射率较低，大部分光透过。
+        在红外波段，Ag层将导致反射率显著增加，预计可达80%-95%。
+        吸收率：
+        在可见光波段，吸收率较低，主要由SiO₂层的低吸收特性决定。
+        在红外波段，吸收率会因ITO层的存在而增加，预计可达到10%-30%。
+        总结
+        该复合薄膜结构通过合理选择材料及其厚度范围，可以在可见光波段实现高透过率，同时在红外波段实现高反射率和吸收率。用户可以通过进一步的进化差分运算优化各层的具体厚度，以获得最佳性能。
+    A:{build_composites:[SiO2,Ag,ITO]，set_thickness:[[20,200],[10,50],[20,100]],wl:[400,2500,2100]}
     """
         completion = await self.client.chat.completions.create(
             model=qw_model_name,
@@ -780,7 +811,7 @@ class QwenModel:
             {'role': 'system', 'content': f'{system}'},
             {'role': 'user', 'content': f'开始拟合'},
         ]
-        logtext = ''
+        # logtext = ''
         nt = 1
         total_tokens = 0
         sub_composites = []
@@ -791,7 +822,7 @@ class QwenModel:
                 response_format={"type": "json_object"}
             )
             json_content = qw.choices[0].message.content
-            logtext += f'{json_content}+\n'
+            self.logger.info(f'第{nt}次拟合策略：{json_content}')
             # print(json_content)
             fit_messages.append({'role': 'assistant', 'content': json_content})
 
@@ -805,26 +836,36 @@ class QwenModel:
             json_data, total_tokens1 = await self.fit_evaluation(qw_model_name=qw_model_vl_name, img_path=img1_path,
                                                                  zipped=zipped)
             total_tokens = total_tokens + total_tokens1 + qw.usage.total_tokens if hasattr(qw, 'usage') else None
-            logtext += f'{json_data}+\n'
-            # print(json_data)
+            self.logger.info(f'第{nt}次拟合评价：{json_data}')
             sub_composites = []
             evaluation = {}
+            #选出拟合不好的材料
             for i in json_data:
                 for j in json_data[i]:
                     if not json_data[i][j]['evaluation']:
                         sub_composites.append(i)
             sub_composites = list(set(sub_composites))
+            self.logger.info(f'第{nt}次重新拟合材料:{sub_composites}')
             for i in sub_composites:
                 evaluation[i] = json_data[i]
-            if len(sub_composites) == 0 or nt == 3:
+            if nt==1:
+                solution_fit, zipped = CM.calculate_fit_data(number_polyfit=[3],
+                                                             method="interpolite_composites",
+                                                             sub_composites=sub_composites)
+                self.logger.info(f'\n\n{sub_composites}拟合失败结果：{zipped}\n\n\n')
                 break
             else:
-                nt += 1
-                fit_messages.append({'role': 'user',
-                                     'content': f'开始第{nt}次拟合，需要重新拟合材料为{sub_composites}，根据你选用的拟合方法和参数，用户拟合建议和评价为{evaluation}'})
-                print(
-                    f'开始第{nt}次拟合，需要重新拟合材料为{sub_composites}，根据你选用的拟合方法和参数，用户拟合建议和评价为{evaluation}')
-        return logtext, total_tokens
+                if len(sub_composites) == 0:
+
+                    self.logger.info(f'\n\n拟合成功\n\n\n')
+                    break
+                else:
+                    nt += 1
+                    fit_messages.append({'role': 'user',
+                                         'content': f'开始第{nt}次拟合，需要重新拟合材料为{sub_composites}，根据你选用的拟合方法和参数，用户拟合建议和评价为{evaluation}'})
+                    self.logger.info(
+                        f'开始第{nt}次拟合，需要重新拟合材料为{sub_composites}，\n根据你选用的拟合方法和参数，用户拟合建议和评价为{evaluation}\n\n')
+        return total_tokens
 
     async def choose_method_model(self, qw_model_name: str, full_content: str):
         system = """
@@ -871,24 +912,27 @@ class QwenModel:
 你是一个材料工程师，负责开发二维纳米复合薄膜材料，你会根据用户的要求构建一个材料的初始模型（该初始模型有层状材料组成成分，
 每个组成成分的厚度）,你会分析初始模型的构成机理，并预测在具体波段的透过率，吸收率，反射率等特性。
 要求，
-1.厚度是一个范围值，用户会进行进化差分运算 出最优解，你需要给出每个材料的厚度范围可以用[最小厚度，最大厚度]表示
-2.使用的厚度和波长单位都是纳米
-3.需要有初始模型设计（材料选择，厚度范围），结构构成机理分析，光学预测，总结等方面
+1.厚度是一个范围值，用户会进行进化差分运算 出最优解，你需要给出每个材料的厚度范围可以用[最小厚度，最大厚度]表示。
+2.使用的厚度和波长单位都是纳米。
+3.需要有初始模型设计（材料选择，厚度范围），结构构成机理分析，光学预测，总结等方面。
 4.每层材料不要给多种可能的材料，仅给你预测的一种材料，便于用户进行计算。
-示例：
+5.你需要从用户提供的材料（列表）中选择材料构成复合材料初始模型，选择的材料**不能更改名字**（十分重要）,后续程序会根据它运算
+    例如：用户如果使用的材料列表为['Ag', 'Au(2)', 'Au','Ge(2Z)', 'Ge(Z)', 'MoS2', 'SiO2', 'TiO2(1)', 'TiO2(2)', 'TiO2', 'VO2', 'ZnS']
+    其中'TiO2(1)', 'TiO2(2)', 'TiO2',为不同的TiO2组分你都可以尝试，但是你使用的一定式列表里的名称Au(2),TiO2或者TiO(1),不能使用TiO_2这种列表不存在的材料
+输出示例：
 Q:帮我预测一个可见光高透过，红外高反射和吸收的复合薄膜结构
 A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而在红外波段（700-2500 nm）具有高反射率和吸收率的复合薄膜结构，我们可以采用以下策略：
     初始模型设计
     材料选择：
-    可见光高透过层：使用透明的氧化物材料，如二氧化硅（SiO₂），其在可见光波段具有高透过率。
+    可见光高透过层：使用透明的氧化物材料，如二氧化硅（SiO2），其在可见光波段具有高透过率。
     红外反射层：使用金属材料，如银（Ag）或铝（Al），这些金属对红外波段有较高的反射率。
     红外吸收层：使用半导体材料，如氧化铟锡（ITO）或氮化钛（TiN），这些材料在红外波段具有一定的吸收能力。
     厚度范围：
-    SiO₂层：[50, 200] nm （用于可见光高透过）
+    SiO2层：[50, 200] nm （用于可见光高透过）
     Ag层：[10, 50] nm （用于红外反射）
     ITO层：[20, 100] nm （用于红外吸收）
     结构构成机理分析
-    可见光高透过：SiO₂层的主要功能是确保可见光波段的高透过率。由于其低折射率和低吸收系数，SiO₂能够在不显著衰减光强度的情况下让可见光通过。
+    可见光高透过：SiO2层的主要功能是确保可见光波段的高透过率。由于其低折射率和低吸收系数，SiO₂能够在不显著衰减光强度的情况下让可见光通过。
     红外高反射：Ag层能够有效地反射红外光。这是因为金属在红外波段通常表现出高反射率，且Ag的光学性能特别适合用于反射红外辐射。
     红外高吸收：ITO层可以吸收部分红外光，从而减少红外光的透过。ITO作为一种透明导电氧化物，在红外波段具有一定的吸收特性，这有助于增强整体结构的红外吸收能力。
     光学特性预测
@@ -904,16 +948,16 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
     总结
     该复合薄膜结构通过合理选择材料及其厚度范围，可以在可见光波段实现高透过率，同时在红外波段实现高反射率和吸收率。用户可以通过进一步的进化差分运算优化各层的具体厚度，以获得最佳性能。
         """
-        log = ""
+        materialData = [i.split('.')[0] for i in os.listdir(r'content/materialData')]
         messages = [
             {'role': 'system', 'content': f'{system}'},
-            {'role': 'user', 'content': f'构建的初始材料模型需要满足{full_content}'},
+            {'role': 'user', 'content': f'构建的初始材料模型需要满足{full_content},你可以挑选的材料有{materialData}'},
         ]
         turn = 1
 
         #  选择计算策略
         method_choose, tokens = await self.choose_method_model(qw_model_choose_name, full_content)
-        log = log + f'选择的计算策略是{method_choose}'
+        self.logger.info(f'选择的计算策略是{method_choose}')
 
         if deepmind:
             while True:
@@ -931,7 +975,7 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                 )
                 async for chunk in completion:
                     if not chunk.choices:
-                        log = log + '\nUsage:' + str(chunk.usage) + '\n'
+                        self.logger.info('\nUsage:' + str(chunk.usage) + '\n')
                     else:
                         delta = chunk.choices[0].delta
                         if hasattr(delta, "reasoning_content") and delta.reasoning_content != None:
@@ -941,16 +985,17 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                         else:
                             answer_content += str(delta.content) if delta.content is not None else ""
                 messages.append({"role": "assistant", "content": answer_content})
-                log = log + "\n" + "=" * 20 + f"第{turn}思考过程" + "=" * 20 + "\n" + reasoning_content + "\n" + "=" * 20 + f"第{turn}回复" + "=" * 20 + "\n" + answer_content
+                self.logger.info("\n" + "=" * 20 + f"第{turn}思考过程" + "=" * 20 + "\n" + reasoning_content + "\n" + "=" * 20 + f"第{turn}回复" + "=" * 20 + "\n" + answer_content)
+                # self.logger.info("\n" + "=" * 20 + f"第{turn}预测材料过程" + "=" * 20 + "\n" + answer_content + "\n" + "=" * 20 + f"第{turn}回复" + "=" * 20 + "\n" + answer_content)
 
                 # 开始计算，获取json数据
-                json_content, total_tokens = self.communication_format(qw_model_name=qw_model_format_name,
-                                                                       full_content=answer_content)
+                json_content, total_tokens = await self.communication_format(qw_model_name=qw_model_format_name,
+                                                                             full_content=answer_content)
                 json_content1 = self.content_to_json(json_content)
                 set_thickness = [(i[0] + i[1]) / 2 for i in json_content1['set_thickness']]
-
+                self.logger.info(f'\n材料格式化输出为{json_content1}\n')
                 # 创建材料模型对象
-                CM = CalculatedMaterials(build_composites=['build_composites'],
+                CM = CalculatedMaterials(build_composites=json_content1['build_composites'],
                                          set_thickness=set_thickness,
                                          wl=json_content1['wl'])
 
@@ -958,7 +1003,7 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                 logtext, fit_total_tokens = await self.fit_Agent(qw_model_name=qw_model_fit_name,
                                                                  qw_model_vl_name=qw_model_vl_name, CM=CM)
 
-                log = log + "\n" + f"第{turn}次拟合材料阶段" + "\n" + f'{logtext}' + '\n'
+                self.logger.info("\n" + f"第{turn}次拟合材料阶段" + "\n" + f'{logtext}' + '\n')
 
                 # 光学性能计算
 
@@ -966,10 +1011,10 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                                                                            json_content1['set_thickness'])
 
                 # 判断材料模型是否满足预期
-                json_content2, total_tokens2 = self.evaluation_model(qw_model_vl_name=qw_model_evaluation_name,
+                json_content2, total_tokens2 = await self.evaluation_model(qw_model_vl_name=qw_model_evaluation_name,
                                                                      full_content=full_content, path=img_url)
                 evaluation_json = self.content_to_json(json_content2)
-                log = log + '\n' + f"第{turn}评估" + '\n' + f'{evaluation_json}' + '\n'
+                self.logger.info('\n' + f"第{turn}评估" + '\n' + f'{evaluation_json}' + '\n')
 
                 if evaluation_json['evaluation'] or turn == 5:
                     break
@@ -978,54 +1023,53 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                     messages.append(
                         {'role': 'user', 'content': f'{advice},根据以上建议和计算的图像结果重新预测材料基础模型'})
                     turn += 1
-                print(log, end='', flush=True)
         else:
             while True:
-                answer_content = ""  # 定义完整回复
                 completion = await self.client.chat.completions.create(
-                    model=qw_model_name,  # 此处以 qwq-32b 为例，可按需更换模型名称
+                    model=qw_model_name,
                     messages=messages
-                )
+                ) #开始预测材料模型
                 assistant_content = completion.choices[0].message.content
-                log = log + "\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n" + assistant_content
+
+                self.logger.info("\n" + "=" * 20 + f"第{turn}完整回复" + "=" * 20 + "\n" + assistant_content)
                 turn += 1
                 messages.append({"role": "assistant", "content": assistant_content})
 
-                # 开始计算，获取json数据
-                json_content, total_tokens = self.communication_format(qw_model_name=qw_model_format_name,
-                                                                       full_content=answer_content)
+                # 开始计算，将第一论预测的材料模型格式化，获取json数据
+                json_content, total_tokens = await self.communication_format(qw_model_name=qw_model_format_name,
+                                                                             full_content=assistant_content)
                 json_content1 = self.content_to_json(json_content)
                 set_thickness = [(i[0] + i[1]) / 2 for i in json_content1['set_thickness']]
-
+                self.logger.info(f'\n材料格式化输出为{json_content1}\n')
                 # 创建材料模型对象
-                CM = CalculatedMaterials(build_composites=['build_composites'],
+                CM = CalculatedMaterials(build_composites=json_content1['build_composites'],
                                          set_thickness=set_thickness,
                                          wl=json_content1['wl'])
 
                 # 开始拟合
-                logtext, fit_total_tokens = await self.fit_Agent(qw_model_name=qw_model_fit_name,
-                                                                 qw_model_vl_name=qw_model_vl_name, CM=CM)
+                fit_total_tokens = await self.fit_Agent(qw_model_name=qw_model_fit_name,
+                                                        qw_model_vl_name=qw_model_vl_name, CM=CM)
 
-                log = log + "\n" + f"第{turn}次拟合材料阶段" + "\n" + f'{logtext}' + '\n'
+                self.logger.info("\n" + f"第{turn}次拟合材料阶段完成，使用tokens:" + f'{fit_total_tokens}' + '\n')
 
                 # 光学性能计算
                 optimal_thickness, R, T, A, img_url = CM.calculate_methods(method_choose['method'],
                                                                            json_content1['set_thickness'])
 
                 # 判断材料模型是否满足预期
-                json_content2, total_tokens2 = self.evaluation_model(qw_model_vl_name=qw_model_evaluation_name,
+                json_content2, total_tokens2 = await self.evaluation_model(qw_model_vl_name=qw_model_evaluation_name,
                                                                      full_content=full_content, path=img_url)
                 evaluation_json = self.content_to_json(json_content2)
-                log = log + '\n' + f"第{turn}评估" + '\n' + f'{evaluation_json}' + '\n'
+                self.logger.info('\n' + f"第{turn}评估" + '\n' + f'{evaluation_json}' + '\n\n\n\n\n')
                 if evaluation_json['evaluation'] or turn == 5:
                     break
+
                 else:
                     advice = evaluation_json['advice']
                     messages.append(
                         {'role': 'user', 'content': f'{advice},根据以上建议和计算的图像结果重新预测材料基础模型'})
                     turn += 1
-                    print(log, end='', flush=True)
-
+            return assistant_content+evaluation_json['advice']
     async def evaluation_model(self, qw_model_vl_name: str, full_content: str, path: str):
         system = """
         你是一个复合薄膜材料工程师助手，现在用户会构建一个初始的复合材料模型，对这个材料的光学性能有一定的性能期望，他会通过计算

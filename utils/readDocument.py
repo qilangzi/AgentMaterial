@@ -1,6 +1,8 @@
 import os.path
 from model.qwenModel import QwenModel
 from model.documentProcessing import documentProcessing
+import logging
+
 
 
 def readDocument(path: str, embedding_name: str, qw_model_name: str) :
@@ -71,7 +73,8 @@ async def pdf_to_database(qw_model_name: list):
     """
     qw = QwenModel(
         api_key="sk-568bd13551dd42ae9c623bd04504ba02",
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        logger=None
     )
     xj,maxId = await qw.text_to_database(qw_model_name=qw_model_name[0], ipath=r"content/document/input")
     print(f'text 存储完毕,消耗的token为:{xj}\n\n')
@@ -84,11 +87,19 @@ async def pdf_to_database(qw_model_name: list):
     print('embedding 存储完毕')
     await qw.client.close()
 
-async def communication_model(qw_model_name: str, deepmind: bool = False, stream: bool = False):
-    qw = QwenModel(
-        api_key="sk-568bd13551dd42ae9c623bd04504ba02",
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
-    )
-    await qw.communication_model(qw_model_name=qw_model_name,deepmind=deepmind, stream=stream)
+async def communication_model(qw:QwenModel,qw_model_name: str, deepmind: bool = False, stream: bool = False):
+    logger = logging.getLogger('qwenModel')
+    logger.setLevel(logging.INFO)
+    file_handler = logging.FileHandler('model/qwenModel.log', encoding='utf-8', mode='w')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
+    qw.logger=logger
+    await qw.communication_model(qw_model_name=qw_model_name, deepmind=deepmind, stream=stream)
+    # try:
+    #     qw.logger=logger
+    #     await qw.communication_model(qw_model_name=qw_model_name, deepmind=deepmind, stream=stream)
+    # except Exception as e:
+    #     logger.info(e)
     await qw.client.close()
 

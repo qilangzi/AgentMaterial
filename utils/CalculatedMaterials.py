@@ -21,7 +21,7 @@ class CalculatedMaterials:
         return solution_fit,zipped
 
     def calculate_tmm_DE_T(self, bounds:list):
-        composites = MT.build_composites_set(self.__composites, self.set_thickness)
+        composites = MT.build_composites_set(self.__composites, self.build_composites)
         MT.set_thickness_method(composites, self.set_thickness)
         # R,T,A=MT.composites_calculate_rt_tmm(composites, self.__common_wl)
         target_T = MT.filter_data(self.__common_wl)
