@@ -11,3 +11,5 @@ __pycache__/
 .idea/
 
 content/document/电磁屏蔽/
+
+softtool/
