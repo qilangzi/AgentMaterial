@@ -6,7 +6,7 @@ from utils.lifespan import lifespan
 from routers import images,param
 from utils.readDocument import pdf_to_database
 from utils.readDocument import communication_model
-
+from spiders import MagneticCrystspider
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(param.router)
@@ -22,32 +22,30 @@ if __name__=='__main__':
     from utils.CalculatedMaterials import CalculatedMaterials
 
     Base.metadata.create_all(bind=engine)
-    async def main():
-        qw=QwenModel(
-            api_key="sk-568bd13551dd42ae9c623bd04504ba02",
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            logger=None
-        )
-
-        # await pdf_to_database(["qwen-long", "qwen-plus","text-embedding-v3"])
-
-        # await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
-        # await qw.communication_model("qwq-plus", deepmind=True, stream=False)
-        await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
-        # json_data,total=await qw.communication_format("qwen-plus",full_content=content_data)
-        # print(json_data)
-
-
-        # CM=CalculatedMaterials(
-        # # 拟合材料
-        #     build_composites=['TiO2', 'Au', 'SiO2'],
-        #     set_thickness=[50,20,50],
-        #     wl=[200, 1200, 1000]
-        # )
-        # await qw.fit_Agent(qw_model_name="qwen-plus", qw_model_vl_name="qwen-vl-max-latest", CM=CM)
-
-        await qw.client.close()
-    asyncio.run(main())
+    Mgd=MagneticCrystspider.MagneticCrystSider()
+    Mgd.startspider(put_db= True)
+    # async def main():
+    #     qw=QwenModel(
+    #         api_key="sk-568bd13551dd42ae9c623bd04504ba02",
+    #         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    #         logger=None
+    #     )
+    #     # await pdf_to_database(["qwen-long", "qwen-plus","text-embedding-v3"])
+    #     # await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
+    #     # await qw.communication_model("qwq-plus", deepmind=True, stream=False)
+    #     await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
+    #     # json_data,total=await qw.communication_format("qwen-plus",full_content=content_data)
+    #     # print(json_data)
+    #     # CM=CalculatedMaterials(
+    #     # # 拟合材料
+    #     #     build_composites=['TiO2', 'Au', 'SiO2'],
+    #     #     set_thickness=[50,20,50],
+    #     #     wl=[200, 1200, 1000]
+    #     # )
+    #     # await qw.fit_Agent(qw_model_name="qwen-plus", qw_model_vl_name="qwen-vl-max-latest", CM=CM)
+    #
+    #     await qw.client.close()
+    # asyncio.run(main())
 
     # from utils.CalculatedMaterials import CalculatedMaterials
     # import os

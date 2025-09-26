@@ -1070,6 +1070,7 @@ A:为了设计一个在可见光波段（400-700 nm）具有高透过率，而�
                         {'role': 'user', 'content': f'{advice},根据以上建议和计算的图像结果重新预测材料基础模型'})
                     turn += 1
             return assistant_content+evaluation_json['advice']
+
     async def evaluation_model(self, qw_model_vl_name: str, full_content: str, path: str):
         system = """
         你是一个复合薄膜材料工程师助手，现在用户会构建一个初始的复合材料模型，对这个材料的光学性能有一定的性能期望，他会通过计算
