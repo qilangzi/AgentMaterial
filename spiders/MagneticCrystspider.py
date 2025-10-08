@@ -13,7 +13,6 @@ from database.modles import *
 from sqlalchemy import and_
 from sqlalchemy import func
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 import logging
 logging.basicConfig(
     level=logging.INFO,  # 记录INFO及以上级别的日志
@@ -85,6 +84,7 @@ class MagneticCrystSider:
                 results.append(future.result())
         # for res in results:
         #     print(res)
+
     def delete_sub(self, html_content, tags_to_remove: list):
         """
         删除HTML标签中的<sub>标签
@@ -100,28 +100,34 @@ class MagneticCrystSider:
         response = requests.get(self.url, headers=self.headers)
         html_data = response.text.replace('<sub>', '').replace('</sub>', '')
         tree = etree.HTML(html_data)
-        element_names = tree.xpath('//tr/td[@width="200" and @align="center" and @valign="top"]')
-        all_elements = []
-        for td in element_names:
-            td_html = etree.tostring(td, encoding='utf-8', method='html').decode('utf-8')
-            cleaned_str = td_html.replace('<sub>', '').replace('</sub>', '')
-            td_tree = etree.HTML(cleaned_str)
-            name = td_tree.xpath(".//a[contains(@href, 'index.php?index=') and @class='blue']/text()")
-            name_url = td_tree.xpath(".//a[contains(@href, 'index.php?index=') and @class='blue']/@href")
-            self.resout_data['elements_id'] = name_url[0].split('index=')[1]
-            self.resout_data['elements_name'] = name
-            self.resout_data['elements_url'] = name_url
+        nu1 = tree.xpath(r"//a[contains(@href, 'index.php?index=') and @class='blue']")
+        nuu = [[nu.xpath(r"./@href"), nu.xpath("./text()[1]")] for nu in nu1]
+        for i in nuu:
+            self.resout_data['elements_id'] = i[0][0].split('index=')[1]
+            self.resout_data['elements_url'] = i[0]
+            self.resout_data['elements_name'] = i[1][0]
             self.all_data.append(self.resout_data)
             self.resout_data = {}
+
 
     def startspider(self, put_db=False):
         self.web_1()
         # 筛选有用元素（保持原有逻辑）
-        for i in self.all_data:
-            for j in self.magnetic_elements:
-                low_n = i['elements_name'][0].lower()
-                if j in low_n:
-                    self.useful_elements.append(i)
+        added_indexes = set()  # 记录已添加的index
+        useful_elements = []
+
+        for item in self.all_data:
+            compound = item['elements_name'].lower()
+            if any(n in compound for n in self.magnetic_elements):
+                # 用index作为唯一标识去重
+                if item['elements_url'][0] not in added_indexes:
+                    self.useful_elements.append(item)
+                    added_indexes.add(item['elements_url'][0])
+        # for i in self.all_data:
+        #     for j in self.magnetic_elements:
+        #         low_n = i['elements_name'][0].lower()
+        #         if j in low_n:
+        #             self.useful_elements.append(i)
 
         self.process_with_multithread(put_db)
 
@@ -216,13 +222,56 @@ class MagneticCrystSider:
         table.append(data)
         return table
 
+    def index_incomm_set(self,html_data_1: str):
+        single_tree = etree.HTML(html_data_1)
+        new_url = single_tree.xpath("//head/meta[@http-equiv='REFRESH']/@content")
+        if new_url:
+            url = new_url[0].split('url=')[1]
+            return url
+        else:
+            return False
+
+    def seach_vectors(self,single_tree: etree):
+        Propagation_vector = single_tree.xpath(
+            "//b[contains(text(), 'Propagation vector:')]/following-sibling::text()[1]")
+        if Propagation_vector:
+            # print(Propagation_vector)
+            return Propagation_vector
+        else:
+            Propagation_vector = single_tree.xpath(
+                "//br[preceding::b[contains(text(), 'Propagation vector(s):')] and following::b[contains(text(), 'Transition Temperature:')]]")
+            if Propagation_vector:
+                target_brs = Propagation_vector[:-2]
+                Propagation_vector = [br.xpath("./following-sibling::text()[1]") for br in target_brs]
+            else:
+                Propagation_vector = single_tree.xpath(
+                    "//br[preceding::b[contains(text(), 'Propagation vector(s):')] and following::b[contains(text(), 'Experiment Temperature:')]]")
+                target_brs = Propagation_vector[:-1]
+                Propagation_vector = [br.xpath("./following-sibling::text()[1]") for br in target_brs]
+                # print(Propagation_vector)
+            return Propagation_vector
+            # print(Propagation_vector)
+
+
+
+
     def touch_data(self, element,db,put_db=False):
         single_url = r'https://www.cryst.ehu.es/magndata/' + f'{element["elements_url"][0]}'
+        response_1 = requests.get(single_url, headers=self.headers)
+        html_data_1 = response_1.text
+        # print(html_data_1)
+        new_url = self.index_incomm_set(html_data_1)
+        print(new_url)
+        if new_url:
+            new_url = r'https://www.cryst.ehu.es/magndata/' + f'{new_url}'
+            response_1 = requests.get(new_url, headers=self.headers)
+            html_data_1 = response_1.text
+            single_url=new_url
+
         if put_db:
             try:
                 dbMaterials=MagneticCryst(
                     material_id=element['elements_id'],
-
                     material_url=single_url,
                 )
                 db.add(dbMaterials)
@@ -231,23 +280,18 @@ class MagneticCrystSider:
                 print(f"id={element['elements_id']}保存数据库失败:{e}")
                 logging.error(f"id={element['elements_id']}保存数据库失败:{e}")
         db_ids = db.query(MagneticCryst).filter(MagneticCryst.material_id == element['elements_id']).first()
-
-        response_1 = requests.get(single_url, headers=self.headers)
-        html_data_1 = response_1.text
         single_tree = etree.HTML(html_data_1)
         new_name = self.search_name(single_tree)
-        img_url_1 = single_tree.xpath("//i[contains(text(), 'Magnetic structure with all atoms')]/../..//a/@href")
+        img_url_1 = single_tree.xpath("//td[@style='text-align:center;']/a/@href")
         # /../..：从 <i> 向上回溯两次，到达共同的父节点 <td>（第一次 .. 到 <br>，第二次 .. 到 <td>）。
         parent_space_group_url = single_tree.xpath(
             "//b[contains(text(), 'Parent space group')]/following::a[@class='blue'][1]/@href")
-        Propagation_vector = single_tree.xpath(
-            "//b[contains(text(), 'Propagation vector:')]/following-sibling::text()[1]")
+        Propagation_vector = self.seach_vectors(single_tree)
         Transition_Temperature = single_tree.xpath(
             "//b[contains(text(), 'Transition Temperature:')]/following-sibling::text()[1]")
         Experiment_Temperature = single_tree.xpath(
             "//b[contains(text(), 'Experiment Temperature:')]/following-sibling::text()[1]")
-        Lattice_parameters_of_the_magnetic_unit_cell = single_tree.xpath(
-            "//b[contains(text(), 'Lattice parameters of the magnetic unit cell:')]/following-sibling::text()[1]")
+        Lattice_parameters_of_the_magnetic_unit_cell = self.seach_latticePParameters(single_tree)
         BNS_Magnetic_Space_Group = single_tree.xpath(
             "//b[contains(text(), 'BNS Magnetic Space Group:')]/following::a[@class='blue'][1]/@href")
         img_url_2=[]
@@ -259,7 +303,7 @@ class MagneticCrystSider:
         element['new_name'] = new_name
         element['img_url'] = {'url':img_url_2}
         element['parent_space_group_url'] = parent_space_group_url[0] if parent_space_group_url else None
-        element['Propagation_vector'] = Propagation_vector[0] if Propagation_vector else None
+        element['Propagation_vector'] = json.dumps(Propagation_vector)
         element['Transition_Temperature'] = Transition_Temperature[0] if Transition_Temperature else None
         element['Experiment_Temperature'] = Experiment_Temperature[0] if Experiment_Temperature else None
         element['Lattice_parameters_of_the_magnetic_unit_cell'] = Lattice_parameters_of_the_magnetic_unit_cell[0] if Lattice_parameters_of_the_magnetic_unit_cell else None
@@ -282,8 +326,9 @@ class MagneticCrystSider:
         target_table1 = single_tree.xpath(
             "//font[contains(text(), 'Magnetic atoms')]/following::table[@class='sample'][1]")
         if not target_table1:
-            print(f"id={element['elements_id']}未找到目标表格，请检查HTML结构或XPath")
-            logging.error(f"id={element['elements_id']}未找到目标表格，请检查HTML结构或XPath")
+            print(f"id={element['elements_id']}未找到# Magnetic atoms目标表格，请检查HTML结构或XPath")
+            logging.error(f"id={element['elements_id']}未找到# Magnetic atoms目标表格，请检查HTML结构或XPath")
+            element['magnetic_atoms'] = {}
         else:
             target_table_string = etree.tostring(target_table1[0], encoding='utf-8', method='html').decode('utf-8')
             table_1 = self.search_table(target_table_string)
@@ -306,15 +351,18 @@ class MagneticCrystSider:
             #     cell_texts[-7:-4] = [m_tags]
             #     data.append(cell_texts)
             # element['magnetic_atoms'] = {'headers1': headers1, 'data': data}
+
+
         magenticAtom1={}
         p1_tags = single_tree.xpath("//p/b/font[@color='red']/text()")
-        for i1 in p1_tags:
-            if 'Set of atoms in the unit cell related by symmetry with the magnetic atom' in i1:
-                target_table1 = single_tree.xpath(
-                    f"//font[contains(text(), '{i1}')]/following::table[@class='sample'][1]")
-                target_table_string = etree.tostring(target_table1[0], encoding='utf-8', method='html').decode('utf-8')
-                table_1 = self.search_table(target_table_string)
-                magenticAtom1[f'{i1}'] = {'headers1': table_1[0], 'data': table_1[1]}
+        if p1_tags:
+            for i1 in p1_tags:
+                if 'Set of atoms in the unit cell related by symmetry with the magnetic atom' in i1:
+                    target_table1 = single_tree.xpath(
+                        f"//font[contains(text(), '{i1}')]/following::table[@class='sample'][1]")
+                    target_table_string = etree.tostring(target_table1[0], encoding='utf-8', method='html').decode('utf-8')
+                    table_1 = self.search_table(target_table_string)
+                    magenticAtom1[f'{i1}'] = {'headers1': table_1[0], 'data': table_1[1]}
                 # cleaned_target_table_string = self.delete_sub(target_table_string, ['sub', 'small'])
                 # target_table = etree.HTML(cleaned_target_table_string)
                 # headers2 = target_table.xpath(".//tr[1]/th/text()")
@@ -324,13 +372,19 @@ class MagneticCrystSider:
                 #     cell_texts = row.xpath("./td/text()")
                 #     data2.append(cell_texts)
                 # magenticAtom1[f'{i1}'] = {'headers2': headers2, 'data2': data2}
+        else:
+            print(f"id={element['elements_id']}未找到# magenticAtom1目标表格，请检查HTML结构或XPath")
+            logging.error(f"id={element['elements_id']}未找到# magenticAtom1目标表格，请检查HTML结构或XPath")
         element['magnetic_atoms1'] = magenticAtom1
+
+
         # Non-magnetic atoms
         target_table = single_tree.xpath(
             "//b[contains(text(), 'Non-magnetic atoms')]/following::table[@class='sample'][1]")
         if not target_table:
-            print(f"id={element['elements_id']}未找到目标表格，请检查HTML结构或XPath")
-            logging.error(f"id={element['elements_id']}未找到目标表格，请检查HTML结构或XPath")
+            print(f"id={element['elements_id']}未找到Non-magnetic atoms目标表格，请检查HTML结构或XPath")
+            logging.error(f"id={element['elements_id']}未找到Non-magnetic atoms目标表格，请检查HTML结构或XPath")
+            element['non_magnetic_atoms']= {}
         else:
             target_table_string = etree.tostring(target_table1[0], encoding='utf-8', method='html').decode('utf-8')
             table_1 = self.search_table(target_table_string)
@@ -349,12 +403,16 @@ class MagneticCrystSider:
 
         nonMagneticAtom1={}
         p_tags = single_tree.xpath("//p/text()")
-        for i_1 in p_tags:
-            if 'Set of atoms in the unit cell related by symmetry with the atom' in i_1:
-                target_table = single_tree.xpath(f"//p[contains(text(), '{i_1}')]/following::table[@class='sample'][1]")
-                target_table_string = etree.tostring(target_table[0], encoding='utf-8', method='html').decode('utf-8')
-                table_1 = self.search_table(target_table_string)
-                nonMagneticAtom1[f'{i_1}'] = {'headers1': table_1[0], 'data': table_1[1]}
+        if p_tags:
+            for i_1 in p_tags:
+                if 'Set of atoms in the unit cell related by symmetry with the atom' in i_1:
+                    target_table = single_tree.xpath(f"//p[contains(text(), '{i_1}')]/following::table[@class='sample'][1]")
+                    target_table_string = etree.tostring(target_table[0], encoding='utf-8', method='html').decode('utf-8')
+                    table_1 = self.search_table(target_table_string)
+                    nonMagneticAtom1[f'{i_1}'] = {'headers1': table_1[0], 'data': table_1[1]}
+        else:
+            print(f"id={element['elements_id']}未找到# nonMagneticAtom1目标表格，请检查HTML结构或XPath")
+            logging.error(f"id={element['elements_id']}未找到# nonMagneticAtom1目标表格，请检查HTML结构或XPath")
                 # target_table = target_table[0]  # 获取表格节点
                 # # 2. 提取表头（表格第一行的<th>）
                 # headers1 = target_table.xpath(".//tr[1]/th/text()")
@@ -375,12 +433,10 @@ class MagneticCrystSider:
                 db_ids.tableMagneticAtom = json.dumps(element['magnetic_atoms']),
                 db_ids.tableNoMagneticAtom=json.dumps(element['non_magnetic_atoms']),
                 db_ids.tableNoMagneticAtoms=json.dumps(element['non_magnetic_atoms1']),
-
                 db.commit()
             except:
                 print(f"id={element['elements_id']}保存数据库失败-3")
                 logging.info(f"id={element['elements_id']}保存数据库失败-3")
-
         try:
             element['Get_mirreps'] = self.web_3(single_tree, response_1)
             if put_db:
@@ -393,3 +449,125 @@ class MagneticCrystSider:
         except Exception as e:
             print(f"id={element['elements_id']}Get_mirreps失败-{e}")
             logging.info(f"id={element['elements_id']}Get_mirreps失败-{e}")
+
+    def repair_vectors(self):
+        db=next(get_db())
+        existing_list = db.query(MagneticCryst).filter(
+            MagneticCryst.propagationvector == None
+        ).all()
+        if existing_list:
+            for i in existing_list:
+                print(i.material_id)
+                single_url = i.material_url
+                response_1 = requests.get(single_url, headers=self.headers)
+                html_data_1 = response_1.text
+                single_tree = etree.HTML(html_data_1)
+                Propagation_vector = self.seach_vectors(single_tree)
+                if Propagation_vector:
+                    i.propagationvector = json.dumps(Propagation_vector)
+                    db.commit()
+                    print(f"id={i.material_id}保存数据库成功")
+                else:
+                    print(f"id={i.material_id}保存数据库失败")
+        db.close()
+
+    def repair_getmirrepsurl(self):
+        db=next(get_db())
+        existing_list = db.query(MagneticCryst).filter(
+            MagneticCryst.getmirrepsurl == None
+        ).all()
+        if existing_list:
+            for i in existing_list:
+                print(i.material_id)
+                single_url = i.material_url
+                getmirrepsurl=None
+                try:
+                    response_1 = requests.get(single_url, headers=self.headers)
+                    html_data_1 = response_1.text
+                    single_tree = etree.HTML(html_data_1)
+                    getmirrepsurl = self.web_3(single_tree, response_1)
+                except Exception as e:
+                    print(f"id={i.material_id}Get_mirreps失败-{e}")
+                if getmirrepsurl:
+                    i.getmirrepsurl = getmirrepsurl
+                    db.commit()
+                    print(f"id={i.material_id}保存数据库成功")
+                else:
+                    print(f"id={i.material_id}保存数据库失败")
+        db.close()
+
+    def repair_img(self):
+        db=next(get_db())
+        existing_list = db.query(MagneticCryst).filter(
+            MagneticCryst.materImageUrl== '[]'
+        ).all()
+        if existing_list:
+            for i in existing_list:
+                print(i.material_id)
+                single_url = i.material_url
+                response_1 = requests.get(single_url, headers=self.headers)
+                html_data_1 = response_1.text
+                single_tree = etree.HTML(html_data_1)
+                img_url = single_tree.xpath('//td[@style="text-align:center;"]/a/@href')
+                if img_url:
+                    img_url_2 = []
+                    for i1 in img_url:
+                        imgUrl = fr'https://www.cryst.ehu.es/magndata/{i1}'
+                        img_url_2.append(imgUrl)
+                    i.materImageUrl = json.dumps(img_url_2)
+                    db.commit()
+                    print(f"id={i.material_id}保存数据库成功")
+                else:
+                    print(f"id={i.material_id}保存数据库失败")
+        db.close()
+
+    def repair_table(self):
+        db = next(get_db())
+        # 检查这4个列是否全为None
+        rows_to_delete = db.query(MagneticCryst).filter(
+            MagneticCryst.tableMagneticAtoms == None,
+            MagneticCryst.tableMagneticAtom == None,
+            MagneticCryst.tableNoMagneticAtom == None,
+            MagneticCryst.tableNoMagneticAtoms == None
+        ).all()
+
+        if rows_to_delete:
+            for row in rows_to_delete:
+                db.delete(row)
+            db.commit()
+            print(f"已删除 {len(rows_to_delete)} 行数据")
+        else:
+            print("没有符合删除条件的行")
+
+    def seach_latticePParameters(self,single_tree):
+        Lattice_parameters_of_the_magnetic_unit_cell = single_tree.xpath(
+            "//b[contains(text(), 'Lattice parameters of the magnetic unit cell:')]/following-sibling::text()[1]")
+        if Lattice_parameters_of_the_magnetic_unit_cell:
+            LL=Lattice_parameters_of_the_magnetic_unit_cell
+        else:
+            Lattice_parameters_of_the_magnetic_unit_cell = single_tree.xpath(
+                "//b[contains(text(), 'Lattice parameters of the basic unit cell:')]/following-sibling::text()[1]")
+            LL = Lattice_parameters_of_the_magnetic_unit_cell
+        return LL
+
+
+    def repair_latticeParameters(self):
+        db = next(get_db())
+        existing_list = db.query(MagneticCryst).filter(
+            MagneticCryst.latticeParameters == None
+        ).all()
+        if existing_list:
+            for i in existing_list:
+                print(i.material_id)
+                single_url = i.material_url
+                response_1 = requests.get(single_url, headers=self.headers)
+                html_data_1 = response_1.text
+                single_tree = etree.HTML(html_data_1)
+                latticeParameters = self.seach_latticePParameters(single_tree)
+                if latticeParameters:
+                    i.latticeParameters = latticeParameters[0] if latticeParameters else None
+                    db.commit()
+                    print(f"id={i.material_id}保存数据库成功")
+                else:
+                    print(f"id={i.material_id}保存数据库失败")
+        db.close()

@@ -7,13 +7,9 @@ from routers import images,param
 from utils.readDocument import pdf_to_database
 from utils.readDocument import communication_model
 from spiders import MagneticCrystspider
-
 app = FastAPI(lifespan=lifespan)
 app.include_router(param.router)
 app.include_router(images.router)
-
-
-
 
 if __name__=='__main__':
     from database.connection import Base, engine, get_db
@@ -23,7 +19,13 @@ if __name__=='__main__':
 
     Base.metadata.create_all(bind=engine)
     Mgd=MagneticCrystspider.MagneticCrystSider()
-    Mgd.startspider(put_db= True)
+    # Mgd.startspider(put_db= True)
+    # Mgd.repair_vectors()
+    # Mgd.repair_getmirrepsurl()
+    # Mgd.repair_img()
+    # Mgd.repair_table()
+    # Mgd.repair_latticeParameters()
+
     # async def main():
     #     qw=QwenModel(
     #         api_key="sk-568bd13551dd42ae9c623bd04504ba02",
@@ -31,7 +33,7 @@ if __name__=='__main__':
     #         logger=None
     #     )
     #     # await pdf_to_database(["qwen-long", "qwen-plus","text-embedding-v3"])
-    #     # await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
+    #     await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
     #     # await qw.communication_model("qwq-plus", deepmind=True, stream=False)
     #     await communication_model(qw,"qwen-plus", deepmind=False, stream=False)
     #     # json_data,total=await qw.communication_format("qwen-plus",full_content=content_data)
@@ -58,16 +60,3 @@ if __name__=='__main__':
     #                          wl=[200, 1200, 1000])
     # img_path, zipped = CM.calculate_fit_data(number_polyfit=[3], method='interpolite_composites')
     # print(img_path, zipped)
-
-
-
-
-
-
-
-
-
-
-
-
-
